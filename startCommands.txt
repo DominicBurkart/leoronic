@@ -1,5 +1,0 @@
-print testfile0.txt
-linecount testfile1.txt
-print testfile2.txt
-print testfile3.txt
-print testfile4.txt

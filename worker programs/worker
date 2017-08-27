@@ -1,7 +1,0 @@
-#!/bin/bash
-
-#interprets a command passed from the head and performs it. Runs on the worker machine.
-
-# 1.) match the command to a program
-
-# 2.) run the program, passing in parameters from the command.
