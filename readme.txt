@@ -25,8 +25,8 @@ Features:
 Assumptions:
 
   - Network Security.
-    Leoronic is not intended for public-facing clusters and currently does not
-    support standard security procedures.
+    Leoronic is not intended to be run on public-facing computers and currently
+    does not support standard security procedures.
 
   - Reasonably Few Nodes.
     Leoronic is not designed to link together hundreds of computers. Every
@@ -37,17 +37,37 @@ Assumptions:
   - Erlang and Bash Installed.
     While Leoronic was intended for use with late-2000s era machines using
     Debian or Ubuntu server builds, it can operate on any device with
-    erlang and bash. Bash file headers may need to be tweaked for non-*nix
-    systems.
+    erlang and bash (though bash file headers may need to be tweaked for
+    non-*nix systems). Of course, if you want your cluster to perform tasks that
+    require other languages or packages (e.g. Java, or Python with pandas), then
+    you'll need to install them.
 
-To install erlang on your system:
+Installation:
 
-  For Homebrew on OS X: brew install erlang
-  For MacPorts on OS X: port install erlang
-  For Ubuntu and Debian: apt-get install erlang
-  For Fedora: yum install erlang
-  For FreeBSD: pkg install erlang
+  Assuming you're running *nix systems, you have bash ready to go. Next, you'll
+  need to install erlang on all of your computers.
 
-(from https://www.erlang.org/downloads)
+  To install erlang on your system:
 
-Required Bash commands (all standard in *nix):
+    For Homebrew on OS X: brew install erlang
+    For MacPorts on OS X: port install erlang
+    For Ubuntu and Debian: apt-get install erlang
+    For Fedora: yum install erlang
+    For FreeBSD: pkg install erlang
+
+  (from https://www.erlang.org/downloads)
+
+  Next, we can clone this repository locally:
+
+    git clone https://github.com/DominicBurkart/leoronic.git
+
+  Then, distribute it to each node. The location is irrelevant so long as you
+  have some means of launching the bash program "leoronic."
+
+Usage:
+
+  On each node, navigate to wherever you placed the git repository and initiate
+  the cluster:
+
+    bash leoronic
+

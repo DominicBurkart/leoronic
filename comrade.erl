@@ -60,7 +60,20 @@ queue_completes_to_csv() ->
 % miscellaneous functions
 
 system_info() ->
-  ok. %todo
+  application:start(sasl),
+  application:start(os_mon),
+  [{_, _}, {_, Current_Memory}, {_, _}] = memsup:get_system_memory_data(),
+  [{_, Size, Perc}] = disksup:get_disk_data(),
+  application:stop(os_mon),
+  application:stop(sasl),
+
+  Cores = erlang:system_info(logical_processors_available),
+  if
+    Cores =:= unknown -> % MacOS leaves this unknown
+      [Current_Memory, erlang:system_info(schedulers_online)]; %default: # cores
+    true ->
+      [Current_Memory, Cores]
+  end.
 
 run(CommandString, justlocal) ->
   spawn(os, cmd, [CommandString]).
