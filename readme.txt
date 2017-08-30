@@ -71,3 +71,17 @@ Usage:
 
     bash leoronic
 
+  Next, we'll want to add commands to the cluster. First, source leoronic's
+  utilities file:
+
+    source leoronic_utilities
+
+  Then, give your nodes something to do:
+
+    leoronic_add_task 1024 1 1024 false [] [] ["echo hello world!"]
+    leoronic_add_task 1024 1 1024 false [] [] ["echo hi!"]
+    leoronic_add_task 1024 1 1024 false [] [] ["echo what's up???"]
+
+  The format is: requested available memory (bytes), cpu cores, storage (bytes),
+  concurrency (true or false), required tags for the worker, necessary files,
+  and

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+leoronic_task_fields=('int: Minimum memory (in bytes) needed for the task.' \
+'int: Minimum number of cores needed for the task.' \
+'int: Minimum storage (in bytes) needed for the task.' \
+'str: Allow other concurrent tasks? true or false.' \
+'list of str: Required tags for worker node.' \
+'list of str: Paths to necessary files.' \
+'list of str: Bash commands that compose task.')
+
+leoronic_add_task(){
+  erl -sname add_shunt -setcookie $cookie -hidden \
+  -run comrade link_to_leoronic \
+  -run comrade add_shunt "$@"
+}
+
+leoronic_cancel_task(){
+  erl -sname add_shunt -setcookie $cookie -hidden \
+  -run comrade link_to_leoronic \
+  -run comrade cancel_shunt "$@"
+}
+
+leoronic_task_format(){
+  printf 'below are the parameters for declaring a new task:\n\n'
+  printf "%s\n" "${leoronic_task_fields[@]}"
+}

@@ -1,13 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-$name='leoronic'
-$cookie='q.fSODIBTNYadfobpiADGFMLRF90fd7S0FG94RNVS,;Zs]dbf[gfjadgmkw3vx[pOI09]]'
+name='leoronic'
+cookie='q.fSODfIBTNYadfobpiADGFMLRF90fd7S0FG94RNVS,;Zs]dbf[gfjadgmkw3vx[pOI09]]'
 
-source leoronic_utilities
+echo 'Compiling native code.'
+erlc +native comrade.erl
 
-echo "Compiling native code and linking to the leoronic network."
-if [${OSTYPE:0:6} == "Darwin"]; then
-  say "compilation du programme et liant au réseau lioronique"
-fi
-
-erl -sname $sname -setcookie $cookie -run c comrade ['native'] -run comrade init
+echo 'Initializing Leoronic.'
+erl -name leoronic -setcookie $cookie -run comrade init

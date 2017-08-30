@@ -33,11 +33,20 @@ alert_all(Content, Function) ->
 
 %% work queue functions
 
-add_shunt(alskdjf) ->
-  ok. %todo
+add_shunt(Task) ->
+  [Worker] = nodes(connected),
+  %todo: deal with file uploading
+  spawn(Worker, comrade, add_or_update_task, [Task]).
 
-del_shunt(dsflgkj) ->
-  ok. %todo
+cancel_shunt(Task) ->
+  [Worker] = nodes(connected),
+  spawn(Worker, comrade, cancel_task, [Task]).
+
+link_to_leoronic() ->
+  {ok, Host} = inet:gethostname(),
+  if net_kernel:connect_node(list_to_atom("leoronic@"++Host)) =:= false:
+    io:format("Link failed: Leoronic is not running on local host " ++ Host)
+  end.
 
 consider_queue() -> %evaluates whether to start a new task.
   ok. %todo
@@ -46,7 +55,13 @@ add_or_update_task(Task) ->
   alert_all(Task, add_or_update_task).
 
 add_or_update_task(Task, justlocal) ->
-  ets:insert(local_queue, Task).
+  os:getenv("leoronic_local_pid") ! {add_or_update, Task}.
+
+cancel_task(Task) ->
+  alert_all(Task, cancel_task).
+
+cancel_task(Task, justlocal) ->
+  os:getenv("leoronic_local_pid") ! {cancel, Task}.
 
 sync_queue() ->
   ok. %todo
@@ -89,19 +104,64 @@ run_on_all(CommandString) ->
 
 %% node initialization and general behavior
 
+local_ips() ->
+%collects all IPV4 address on the network, excluding that of this computer.
+%from https://stackoverflow.com/questions/32984215/erlang-finding-my-ip-address
+    {ok, Addrs} = inet:getifaddrs(),
+    {ok, [{ThisIP, _, _}, _ ]} = inet:getif(),
+    [
+         Addr || {_, Opts} <- Addrs, {addr, Addr} <- Opts,
+         Addr =/= {127,0,0,1},
+         Addr =/= ThisIP,
+         size(Addr) == 4
+    ].
+
+search_for_other_workers() ->
+  connect(local_ips()).
+
+connect([]) ->
+  ok;
+
+connect([IP | T]) ->
+  {_, Hostent} = inet:gethostbyaddr(IP),
+  [Hostname] = element(2, Hostent),
+  net_kernel:connect_node(list_to_atom("leoronic@" ++ Hostname)),
+  %^ we make a new atom for each non-local address on the network (constrained).
+  connect(T).
+
 init() ->
   os:putenv("leoronic_local_pid", os:getpid()),
-  ets:new(local_queue, [set, local_queue]), %not right yet
-  loop(#state{mes = orddict:new()
+  ets:new(local_queue, [set, named_table]),
+  ets:new(local_resources, [set, named_table]),
+  spawn(search_for_other_workers),
+  loop(#state{mes = orddict:new(),
               data = orddict:new()}).
 
-loop(S=#state{}) -> %actually runs the
+loop(S=#state{}) ->
   receive
-    {add, Task} -> %now redundant
+
+    {has, Local_Resource, pID} ->
+      case ets:lookup(local_resources, Local_Resource) of
+          [] ->
+            ok,
+          [in_progress] ->
+            ok,
+          Found ->
+            pID ! {requested_resource_at, node(), Local_Resource}
+      end,
+      loop(S);
+
+    {requested_resource_at, Node, Local_Resource} ->
+      if ets:lookup(local_resources, Local_Resource) =:= [] ->
+        spawn(Node, comrade, send_resource, node()),
+        ets:insert(local_resources, {Local_Resource, in_progress})
+      end,
+      loop(S);
+
+    {add_or_update, Task} ->
       ets:insert(local_queue, Task),
       consider_queue(),
       loop(S);
-
 
     Unknown ->
       io:format("Unknown message: ~p~n",[Unknown]),
