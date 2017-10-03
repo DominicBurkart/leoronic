@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+
+#This script was designed for continuous integration testing with Travis CI.
+# If it passes, then the following conditions have been met:
+
+# Leoronic can be compiled and instantiated.
+# TODO: multiple local Leoronic nodes can communicate.
+  # performed in: start_concurrency
+# TODO: Tasks (including requisite files) can be dispatched to Leoronic and cancelled.
+  # adding performed in: test_leoronic_add_*
+  # deleting performed in: test_leoronic_del_task
+
+  #!/usr/bin/env bash
+
+name='leoronic'
+cookie=$RANDOM$RANDOM$RANDOM$RANDOM$RANDOM$RANDOM$RANDOM$RANDOM$RANDOM$RANDOM
+
+touch ~/.leoronic_cookie
+echo $cookie > ~/.leoronic_cookie
+
+echo 'Compiling native code.'
+erlc +native comrade.erl
+
+echo 'Initializing first instance of Leoronic.'
+( erl -name $name -setcookie $cookie -run comrade )
+
+source leoronic_utilities
+
+start_concurrency(){
+  echo 'Initializing multiple leoronic instances locally.'
+
+  erl -name leoronic_2 -setcookie $cookie \
+  -run comrade init \
+  -run comrade link_to_leoronic
+
+  erl -name leoronic_3 -setcookie $cookie \
+  -run comrade init \
+  -run comrade link_to_leoronic
+
+  erl -name leoronic_4 -setcookie $cookie \
+  -run comrade init \
+  -run comrade link_to_leoronic
+
+  #TODO: assert that there are now four connected leoronic nodes
+}
+
+test_leoronic_add_task(){
+  test_leoronic_add_task 1024 1 1024 false "" "" 'echo hi!' #simple task
+  test_leoronic_add_task 1024 1 1024 false "" \
+    "test_cmd_file" \
+    'v=`cat test_cmd_file`; echo $v' #task with file
+}
+
+test_leoronic_add_tasks_from_file(){
+  leoronic_add_tasks_from_file test_file
+}
+
+test_leoronic_add_tasks_from_str(){
+  str="echo good; echo job \necho nice; echo work"
+  leoronic_add_tasks_from_str $str
+}
+
+test_leoronic_del_task(){
+  #TODO
+}
+
+touch test_cmd_file
+printf "echo nice; echo nice\necho cool; echo cool" > test_cmd_file
+
+start_concurrency
+test_leoronic_add_task
+test_leoronic_add_tasks_from_file
+test_leoronic_add_tasks_from_str
+test_leoronic_del_task
+
+rm test_cmd_file

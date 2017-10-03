@@ -4,7 +4,9 @@
          add_shunt/1,
          del_shunt/1,
          system_info/0,
-         alert_all/2
+         alert_all/2,
+         send_to_all/1,
+         get_queue/0
        ]).
 -record(state, {mes, data}).
 
@@ -15,7 +17,7 @@ alert_all(Content, [One_Node | Remaining_Nodes], Function) ->
     spawn(One_Node, comrade, Function, [Content, justlocal]),
     alert_all(Content, Remaining_Nodes, Function)
   catch
-    exit:Exit ->
+    exit:Exit -> % at least one node disconnected from the network.
       Actually_Remaining =
         [ Nn || Nn <- Remaining_Nodes, lists:member(Nn, nodes())],
       alert_all(Content, Actually_Remaining, Function)
@@ -30,44 +32,92 @@ alert_all(Content, Function) ->
 
 %% end alert_all function
 
-
-%% work queue functions
+%% shunt functions
 
 add_shunt(Task) ->
-  [Worker] = nodes(connected),
-  %todo: deal with file uploading
+  [Worker | _ ] = nodes(connected),
+  %TODO: deal with file uploading
   spawn(Worker, comrade, add_or_update_task, [Task]).
 
-cancel_shunt(Task) ->
-  [Worker] = nodes(connected),
+del_shunt(Task) ->
+  [Worker | _ ] = nodes(connected),
   spawn(Worker, comrade, cancel_task, [Task]).
+
+add_tag(Tag) ->
+if
+  net_kernel:connect_node(list_to_atom("leoronic@"++Host)) =:= false ->
+
+end.
 
 link_to_leoronic() ->
   {ok, Host} = inet:gethostname(),
-  if net_kernel:connect_node(list_to_atom("leoronic@"++Host)) =:= false:
-    io:format("Link failed: Leoronic is not running on local host " ++ Host)
+  if
+    net_kernel:connect_node(list_to_atom("leoronic@"++Host)) =:= false ->
+      connect(local_ips()) %only connect to other machines if necessary.
   end.
 
+%% end shunt functions
+
+%% file management functions
+
+send_to_all(Filename) ->
+  send_file(Filename, nodes()).
+
+send_file(Filename, [One | Remaining]) ->
+  try
+    Receiver = spawn(One, comrade, receive_file, self()),
+    %TODO
+    send_file(Filename, Remaining)
+  catch
+    exit:Exit -> % at least one node disconnected from the network.
+      Actually_Remaining =
+        [ Nn || Nn <- Remaining_Nodes, lists:member(Nn, nodes())],
+      send_file(Filename, Actually_Remaining)
+  end;
+
+receive_file(Filename, Pid_source) ->
+  ok. %TODO
+
+%% end file management functions
+
+
+%% work queue functions
+
 consider_queue() -> %evaluates whether to start a new task.
-  ok. %todo
+  ok. %TODO
 
 add_or_update_task(Task) ->
   alert_all(Task, add_or_update_task).
 
 add_or_update_task(Task, justlocal) ->
-  os:getenv("leoronic_local_pid") ! {add_or_update, Task}.
+  to_server(add_or_update, Task).
 
 cancel_task(Task) ->
   alert_all(Task, cancel_task).
 
 cancel_task(Task, justlocal) ->
-  os:getenv("leoronic_local_pid") ! {cancel, Task}.
+  to_server(cancel, Task).
+
+to_server(Atm, Tsk) ->
+  {ok, H} = inet:gethostname(),
+  {leoronic_local_pid, list_to_atom("leoronic@"++H)} ! {Atm, Tsk}.
 
 sync_queue() ->
-  ok. %todo
+  ok. %TODO
 
-queue_completes_to_csv() ->
-  ok. %todo
+queue_to_csv() ->
+  table_to_csv(local_queue, none).
+
+table_to_csv(Atm, Cond) ->
+  case Cond of
+    none ->
+      ok; %TODO
+    complete ->
+      ok %TODO
+  end.
+
+get_queue() ->
+  ok. %TODO
 
 %% end work queue functions
 
@@ -119,9 +169,6 @@ local_ips() ->
 search_for_other_workers() ->
   connect(local_ips()).
 
-connect([]) ->
-  ok;
-
 connect([IP | T]) ->
   {_, Hostent} = inet:gethostbyaddr(IP),
   [Hostname] = element(2, Hostent),
@@ -129,16 +176,31 @@ connect([IP | T]) ->
   %^ we make a new atom for each non-local address on the network (constrained).
   connect(T).
 
+connect([]) ->
+  ok;
+
 init() ->
-  os:putenv("leoronic_local_pid", os:getpid()),
+  register(leoronic_local_pid, self()),
   ets:new(local_queue, [set, named_table]),
   ets:new(local_resources, [set, named_table]),
+  io:format("Searching for other workers on the LAN."),
   spawn(search_for_other_workers),
+  io:format("Initialization complete. Ready for tasks."),
   loop(#state{mes = orddict:new(),
               data = orddict:new()}).
 
 loop(S=#state{}) ->
   receive
+
+    {add_or_update, Task} ->
+      ets:insert(local_queue, Task),
+      spawn(consider_queue),
+      loop(S);
+
+    {cancel, Task} ->
+      ets:delete(local_queue, Task),
+      spawn(consider_queue),
+      loop(S);
 
     {has, Local_Resource, pID} ->
       case ets:lookup(local_resources, Local_Resource) of
@@ -158,14 +220,21 @@ loop(S=#state{}) ->
       end,
       loop(S);
 
-    {add_or_update, Task} ->
-      ets:insert(local_queue, Task),
-      consider_queue(),
-      loop(S);
+    {shutdown} ->
+      io:format("saving local queue as csv.~n"),
+      table_to_csv(local_queue, none),
+      io:format("saving complete. No longer monitoring / starting tasks.~n"),
+      io:format("shutting down erlang node.~n"),
+      ok
+
+    {write_local_queue} ->
+      table_to_csv(local_queue, none),
+      loop(S)
 
     Unknown ->
       io:format("Unknown message: ~p~n",[Unknown]),
       loop(S)
+
   end.
 
 %% end node initialization and general behavior

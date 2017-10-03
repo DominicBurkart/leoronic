@@ -3,8 +3,13 @@
 name='leoronic'
 cookie='q.fSODfIBTNYadfobpiADGFMLRF90fd7S0FG94RNVS,;Zs]dbf[gfjadgmkw3vx[pOI09]]'
 
-echo 'Compiling native code.'
-erlc +native comrade.erl
+touch ~/.leoronic_cookie
+echo $cookie > ~/.leoronic_cookie
+
+if [ ! -f comrade.beam ]; then
+  echo 'Compiling native code.'
+  erlc +native comrade.erl
+fi
 
 echo 'Initializing Leoronic.'
-erl -name leoronic -setcookie $cookie -run comrade init
+(erl -name $name -setcookie $cookie -run comrade)

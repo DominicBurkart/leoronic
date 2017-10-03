@@ -1,0 +1,6 @@
+language: erlang
+notifications:
+  email: dominicburkart@nyu.edu
+install: true
+script:
+  - bash test_leoronic
