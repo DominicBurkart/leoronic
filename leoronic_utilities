@@ -52,6 +52,6 @@ example=
 leoronic_task_format(){
   printf 'below are the parameters for declaring a new task:\n\n'
   printf "%s\n" "${leoronic_task_fields[@]}"
-  printf '\n\nexample command:\n'
+  printf '\n\nexample task:\n'
   printf
 }

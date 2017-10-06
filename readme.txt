@@ -130,7 +130,7 @@ Usage:
 Writing code for leoronic:
 
   Leoronic is pretty easy to write for, since it leaves dependencies and file
-  i/o to you, for the most part. You give it the files you want to source,
+  i/o to you for the most part. You give it the files you want to source,
   either by delivering them to each node or linking them as necessary files, and
   you're ready to go.
 
@@ -142,12 +142,15 @@ Writing code for leoronic:
   and a text file) will fail if the python script looks for the other necessary
   file in the local directory. This feature can be disabled to allow for this
   kind of programming, but the default behavior is to simply pass filenames to
-  linked program files as a parameter.
+  linked program files as a parameter. Don't name your files the same thing as
+  the commands you use!
 
   File output, on the other hand, is not modified. Thus, any files output by a
   task run on leoronic should have unique names, or else earlier-run tasks run
-  on the same node will have their output data overwritten.
+  on the same node will have their output data overwritten. This could be
+  intentional – e.g., appending a relevant solution to file full of solutions.
 
   Best practice for leoronic is to keep all file i/o in the local directory, and
   to instantiate leoronic while the working directory is a designated folder
-  that you have read/write access to.
+  that you have read/write access to. It's generally easier to remove temp files
+  after they have served their purpose

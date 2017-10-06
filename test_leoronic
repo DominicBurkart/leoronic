@@ -29,17 +29,18 @@ source leoronic_utilities
 start_concurrency(){
   echo 'Initializing multiple leoronic instances locally.'
 
-  erl -name leoronic_2 -setcookie $cookie \
+  (erl -name leoronic_2 -setcookie $cookie \
   -run comrade init \
-  -run comrade link_to_leoronic
+  -run comrade link_to_leoronic)
 
-  erl -name leoronic_3 -setcookie $cookie \
+  (erl -name leoronic_3 -setcookie $cookie \
   -run comrade init \
-  -run comrade link_to_leoronic
+  -run comrade link_to_leoronic)
 
-  erl -name leoronic_4 -setcookie $cookie \
+  (erl -name leoronic_4 -setcookie $cookie \
   -run comrade init \
   -run comrade link_to_leoronic
+  -run add_tag tagged)
 
   #TODO: assert that there are now four connected leoronic nodes
 }
@@ -49,6 +50,11 @@ test_leoronic_add_task(){
   test_leoronic_add_task 1024 1 1024 false "" \
     "test_cmd_file" \
     'v=`cat test_cmd_file`; echo $v' #task with file
+  test_leoronic_add_task 1024 1 1024 false \
+    "tagged" \ #add task with tag
+    "" \
+    "echo this text should display on leoronic_4"
+    #TODO write script that outputs name of node that runs it to a file
 }
 
 test_leoronic_add_tasks_from_file(){
