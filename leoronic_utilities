@@ -12,14 +12,14 @@ cookie=`cat ~/.leoronic_cookie`
 
 leoronic_add_tag(){
   erl -sname add_tag -setcookie $cookie -hidden \
-  -run comrade link_to_leoronic \
-  -run comrade add_tag "$@"
+  -run leoronic_shunts link_to_leoronic \
+  -run leoronic_shunts add_tag "$@"
 }
 
 leoronic_add_task(){
   erl -sname add_shunt -setcookie $cookie -hidden \
-  -run comrade link_to_leoronic \
-  -run comrade add_shunt "$@"
+  -run leoronic_shunts link_to_leoronic \
+  -run leoronic_shunts add "$@"
 }
 
 leoronic_add_tasks_from_file(){
@@ -29,19 +29,19 @@ leoronic_add_tasks_from_file(){
 
 leoronic_add_tasks_from_str(){
   com="erl -sname add_shunt -setcookie $cookie -hidden \
-  -run comrade link_to_leoronic"
+  -run leoronic_shunts link_to_leoronic"
   IFS=$'\n' read -d '' -r -a tasks <<< ${1} #string passed, split by newlines.
   for t in tasks
   do
-    com="$com -run comrade add_shunt $t"
+    com="$com -run leoronic_shunts add $t"
   done
   eval com
 }
 
 leoronic_del_task(){
   erl -sname add_shunt -setcookie $cookie -hidden \
-  -run comrade link_to_leoronic \
-  -run comrade del_shunt "$@"
+  -run leoronic_shunts link_to_leoronic \
+  -run leoronic_shunts del "$@"
 }
 
 leoronic_get_queue(){
@@ -53,5 +53,5 @@ leoronic_task_format(){
   printf 'below are the parameters for declaring a new task:\n\n'
   printf "%s\n" "${leoronic_task_fields[@]}"
   printf '\n\nexample task:\n'
-  printf
+  printf #TODO
 }

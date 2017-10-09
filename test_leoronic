@@ -40,7 +40,7 @@ start_concurrency(){
   (erl -name leoronic_4 -setcookie $cookie \
   -run comrade init \
   -run comrade link_to_leoronic
-  -run add_tag tagged)
+  -run comrade add_tag tagged)
 
   #TODO: assert that there are now four connected leoronic nodes
 }

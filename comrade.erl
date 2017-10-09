@@ -1,12 +1,8 @@
 -module(comrade). %get it? because it's a functional (classless) program?
 -export([
          init/0,
-         add_shunt/1,
-         del_shunt/1,
          add_tag/1,
          del_tag/1,
-         add_tag_shunt/1,
-         del_tag_shunt/1,
          system_info/0,
          alert_all/2,
          send_to_all/1,
@@ -62,11 +58,11 @@ loop(S=#state{}) ->
       table_to_csv(local_queue, none),
       io:format("saving complete. No longer monitoring / starting tasks.~n"),
       io:format("shutting down erlang node.~n"),
-      ok
+      ok;
 
     {write_local_queue} ->
       table_to_csv(local_queue, none),
-      loop(S)
+      loop(S);
 
     Unknown ->
       io:format("Unknown message: ~p~n",[Unknown]),
@@ -216,33 +212,3 @@ run_on_all(CommandString) ->
   alert_all(run, CommandString).
 
 % end miscellaneous functions
-
-%% shunt functions
-
-add_shunt(Task) ->
-  [Worker | _ ] = nodes(connected),
-  %TODO: deal with file uploading
-  spawn(Worker, comrade, add_or_update_task, [Task]).
-
-del_shunt(Task) ->
-  [Worker | _ ] = nodes(connected),
-  spawn(Worker, comrade, cancel_task, [Task]).
-
-add_tag_shunt(Tag) ->
-if
-  net_kernel:connect_node(list_to_atom("leoronic@"++Host)) =:= false ->
-    %fail
-  %TODO
-end.
-
-del_tag_shunt(Tag) ->
-ok. %TODO
-
-link_to_leoronic() ->
-  {ok, Host} = inet:gethostname(),
-  if
-    net_kernel:connect_node(list_to_atom("leoronic@"++Host)) =:= false ->
-      connect(local_ips()) %only connect to other machines if necessary.
-  end.
-
-%% end shunt functions
