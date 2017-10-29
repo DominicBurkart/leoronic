@@ -16,7 +16,7 @@ Features:
   - Flexibility.
     If your computers (or at least one of them) can run your code, Leoronic can
     coordinate it. Just give it a list of tasks and some runtime parameters and
-    it'll deal with when to run what where.
+    it'll deal with where to run what.
 
   - Fault Tolerance.
     Leoronic's central features are tolerant to network failures. Even if
@@ -40,14 +40,14 @@ Assumptions:
     While Leoronic was intended for use with late-2000s era machines using
     Debian or Ubuntu server builds, it can operate on any device with
     erlang and bash (though bash file headers may need to be tweaked for
-    non-*nix systems). Of course, if you want your cluster to perform tasks that
-    require other languages or packages (e.g. Java, or Python with pandas), then
-    you'll need to install them.
+    non-linux/unix systems). Of course, if you want your cluster to perform
+    tasks that require other languages or packages (e.g. Java, or Python with
+    pandas), then you'll need to install them.
 
 Installation:
 
-  Assuming you're running *nix systems, you have bash ready to go. Next, you'll
-  need to install erlang on all of your computers.
+  Assuming you're running linux/unix systems, you have bash ready to go.
+  Next, you'll need to install erlang on all of your computers.
 
   To install erlang on your system:
 
@@ -108,9 +108,9 @@ Usage:
       is_first
         runs this task if all older tasks have been completed. Note that
         synchrony cross-nodes is not guaranteed, so if multiple nodes are adding
-        new tasks, the exact ordering may vary. This is a non-issue if all tasks
-        are uploaded from a single source using the leoronic_add_task* commands
-        in leoronic_utilities.
+        new tasks, the exact ordering may vary. This is a unlikely to be an
+        issue if all tasks are uploaded from a single source using the
+        leoronic_add_task* commands in leoronic_utilities.
       all_with_cmd_done echo *
         runs this task if all tasks that match the regex 'echo *' are set as
         complete.
@@ -130,9 +130,8 @@ Usage:
 Writing code for leoronic:
 
   Leoronic is pretty easy to write for, since it leaves dependencies and file
-  i/o to you for the most part. You give it the files you want to source,
-  either by delivering them to each node or linking them as necessary files, and
-  you're ready to go.
+  i/o to you. You give it the files you want to source, either by delivering
+  them to each node or linking them as necessary files, and you're ready to go.
 
   There are a few exceptions. For example, to avoid overwriting input files from
   other commands, leoronic will by default give each "necessary file" a new,
@@ -141,16 +140,24 @@ Writing code for leoronic:
   meaning that, for example, a command with two necessary files (a python script
   and a text file) will fail if the python script looks for the other necessary
   file in the local directory. This feature can be disabled to allow for this
-  kind of programming, but the default behavior is to simply pass filenames to
+  kind of programming, but the expected behavior is to simply pass filenames to
   linked program files as a parameter. Don't name your files the same thing as
-  the commands you use!
+  the commands you use – otherwise, those commands will also be replaced and
+  your task won't run correctly.
 
   File output, on the other hand, is not modified. Thus, any files output by a
   task run on leoronic should have unique names, or else earlier-run tasks run
   on the same node will have their output data overwritten. This could be
   intentional – e.g., appending a relevant solution to file full of solutions.
 
-  Best practice for leoronic is to keep all file i/o in the local directory, and
-  to instantiate leoronic while the working directory is a designated folder
-  that you have read/write access to. It's generally easier to remove temp files
-  after they have served their purpose
+  Best practice for leoronic is to keep all file i/o in the local directory or
+  its subdirectories, and to instantiate leoronic while the working directory is
+  a designated folder that you have read/write access to, since you can then use
+  Leoronic's get_all_files function to receive the working directory (and its
+  children) for each node. If this feature isn't important to you, then feel
+  free to put your files wherever you'd like!
+
+  After each task is run, the working directory is reset to whatever directory
+  Leoronic was instantiated in. However, your scripts and commands can change
+  the working directory as you see fit – and they'll stay changed until the end
+  of the task.

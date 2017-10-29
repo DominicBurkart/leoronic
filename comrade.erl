@@ -83,8 +83,8 @@ to_server(Atm, Tsk) ->
 
 alert_all(Content, [One_Node | Remaining_Nodes], Function) ->
   try
-    spawn(One_Node, comrade, Function, [Content, justlocal]),
-    alert_all(Content, Remaining_Nodes, Function)
+    spawn(comrade, alert_all, [Content, Remaining_Nodes, Function]),
+    try_alert(Node, Function, Content, 1] %throws error if node DNE
   catch
     exit:Exit -> % at least one node disconnected from the network.
       Actually_Remaining =
@@ -96,8 +96,25 @@ alert_all(Task, [], Function) ->
   ok.
 
 alert_all(Content, Function) ->
-  spawn(comrade, Function, [Content, justlocal]),
+  spawn(comrade, Function, [Content, self()]),
   alert_all(Content, nodes(), Function).
+
+try_alert(Node, Function, Content, NumTries) ->
+  spawn(Node, comrade, Function, [Content, self()]),
+  receive
+    confirmed ->
+      ok,
+    after 30000 ->
+      if NumTries < 10 ->
+        io:format("~nUnresponsive node: "),
+        io:format(Node),
+        alert_retry(Node, Function, Content, NumTries + 1),
+      if true ->
+        io:format("~nNode did not respond after 10 retries in 5 minutes: "),
+        io:format(Node),
+        ok
+      end
+  end.
 
 %% end alert_all function
 
