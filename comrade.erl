@@ -3,10 +3,14 @@
          init/0,
          add_tag/1,
          del_tag/1,
+         has_tag/1,
+         has_tag/2,
          system_info/0,
          alert_all/2,
          send_to_all/1,
-         get_queue/0
+         send_to_all_with_tag/1,
+         get_queue/0,
+         in_leoronic/1
        ]).
 -record(state, {mes, data}).
 
@@ -16,7 +20,8 @@ init() ->
   register(leoronic_local_pid, self()),
   ets:new(local_queue, [set, named_table]),
   ets:new(local_resources, [set, named_table]),
-  io:format("Searching for other workers on the LAN."),
+  ets:new(node_tags, [set, named_table]),
+  io:format("Beginning search for other workers on the LAN."),
   spawn(search_for_other_workers),
   io:format("Initialization complete. Ready for tasks."),
   loop(#state{mes = orddict:new(),
@@ -108,9 +113,9 @@ try_alert(Node, Function, Content, NumTries) ->
       if NumTries < 10 ->
         io:format("~nUnresponsive node: "),
         io:format(Node),
-        alert_retry(Node, Function, Content, NumTries + 1),
+        try_alert(Node, Function, Content, NumTries + 1),
       if true ->
-        io:format("~nNode did not respond after 10 retries in 5 minutes: "),
+        io:format("~nNode did not respond after 10 retries over 5 minutes: "),
         io:format(Node),
         ok
       end
@@ -159,6 +164,9 @@ get_queue() ->
 send_to_all(Filename) ->
   send_file(Filename, nodes()).
 
+send_to_all_with_tag(Filename, Tag) ->
+  send_file(Filename, [ N || N <- nodes(), has_tag(Tag, N)]).
+
 send_file(Filename, [One | Remaining]) ->
   try
     Receiver = spawn(One, comrade, receive_file, self()),
@@ -177,6 +185,18 @@ receive_file(Filename, Pid_source) ->
 %% end file management functions
 
 % miscellaneous functions
+
+has_tag(Tag) ->
+  ok. %TODO
+
+has_tag(Tag, Node) ->
+  ok. %TODO
+
+node_tag_list() ->
+  ok. %TODO
+
+full_tag_list() ->
+  ok. %TODO
 
 local_ips() ->
 %collects all IPV4 address on the network, excluding that of this computer.
@@ -227,5 +247,11 @@ run_on(Node, CommandString) ->
 
 run_on_all(CommandString) ->
   alert_all(run, CommandString).
+
+in_leoronic(CommandString) ->
+  {ok, Tokes, _} = erl_scan:string(CommandString),
+  {ok, Parsed} = erl_parse:parse_exprs(Tokes),
+  {value, Result, _} = erl_eval:exprs(Parsed, []),
+  Result.
 
 % end miscellaneous functions

@@ -19,10 +19,10 @@ Features:
     it'll deal with where to run what.
 
   - Fault Tolerance.
-    Leoronic's central features are tolerant to network failures. Even if
-    every other computer disconnects from Leoronic, it will still go through
-    the cluster's incomplete tasks until there are no remaining machines or all
-    the tasks that the remaining machines are capable of doing are done.
+    Leoronic's central features are comparably tolerant to network failures.
+    Even if every other computer disconnects from Leoronic, it will still go
+    through the cluster's incomplete tasks until there are no remaining machines
+    or all the tasks that the remaining machines are capable of doing are done.
 
 Assumptions:
 
@@ -31,10 +31,13 @@ Assumptions:
     does not support standard security procedures.
 
   - Reasonably Few Nodes.
-    Leoronic is not designed to link together hundreds of computers. Every
-    computer maintains an open socket with every other computer in the cluster,
-    and chatter will increase (and eat up computational resources) for each
-    node added.
+    Leoronic was not designed to link together hundreds of computers. Using the
+    simplest setup, every computer maintains an open socket with every other
+    computer in the cluster, and chatter will increase (and eat up computational
+    resources) for each node added. Leoronic allows nodes to be added and
+    perform tasks without connecting to every other node (these nodes are called
+    "ghosts") for setups that require greater scalability, but this scalability
+    comes at the cost of fault tolerance through redundancy.
 
   - Erlang and Bash Installed.
     While Leoronic was intended for use with late-2000s era machines using
@@ -47,7 +50,8 @@ Assumptions:
 Installation:
 
   Assuming you're running linux/unix systems, you have bash ready to go.
-  Next, you'll need to install erlang on all of your computers.
+  Next, you'll need to install erlang on all of your computers (consider doing
+  so in a virtual environment of your choosing).
 
   To install erlang on your system:
 
@@ -127,6 +131,42 @@ Usage:
         as opposed to the 'necessary files' field, which renames said file to
         avoid cross-command conflicts).
 
+  There are circumstances where it doesn't make sense to have a full net, where
+  every node is connected (and using resources to constantly talk to) every
+  other node. For those circumstances, Leoronic provides a framework of "ghost"
+  workers that ask for asks and then perform them from the workers in a Leoronic
+  cluster. A single worker running Leoronic can control many workers in a client
+  / server setup, or a balance can be struck, with a Leoronic network comprised
+  partially of ghosts and partially of workers. The advantage of ghosts is that
+  they require less network activity to maintain and allow clusters to scale,
+  while the advantage of more workers is that there are fewer single points of
+  failure (a leoronic cluster with one worker and many ghosts will fail if the
+  one worker fails, but a cluster with two workers and many ghosts will continue
+  to run with limited risk of loss if one worker fails).
+
+  By default, ghosts connect to the Leoronic worker with the lowest local IP
+  address (if a real number x is passed to the ghost's instantiation program, it
+  scans for active leoronic workers, finds out that there are y active workers,
+  and connects to the ith worker, where i is equal to x mod y). That worker node
+  then receives the tag "clairvoyant" and retains a list of its ghost friends.
+  If that worker has at least two cores, then by default it will designate one
+  core for relaying information between the other workers and the ghosts.
+
+  When a ghost asks it for a task, the ghost includes its information (e.g.,
+  number of available cores and memory). The worker finds the first match in its
+  queue and assigns it to the ghost, sending all the relevant files and
+  information for the ghost to complete the task. The worker then marks that
+  task in the queue as running on the ghost, and lets the other workers (if they
+  exist) know. When the worker has completed the task, it lets its clairvoyant
+  know, and the clairvoyant worker updates the other workers (if they exist) so
+  that each worker's queue is up-to-date.
+
+  If there are no tasks that the ghost can accomplish, the clairvoyant worker
+  tells the ghost to listen indefinitely for more tasks. If the clairvoyant
+  receives a new task for the worker, then it lets the worker know; otherwise,
+  the worker continues to listen silently unless the
+
+
 Writing code for leoronic:
 
   Leoronic is pretty easy to write for, since it leaves dependencies and file
@@ -161,3 +201,6 @@ Writing code for leoronic:
   Leoronic was instantiated in. However, your scripts and commands can change
   the working directory as you see fit – and they'll stay changed until the end
   of the task.
+
+  It's generally good practice to run code that requires outside libraries in
+  virtual environments, so that you can control and maintain your dependencies.

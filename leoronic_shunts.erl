@@ -9,6 +9,13 @@
 
 %% shunt functions
 
+connect([IP | T]) ->
+  {_, Hostent} = inet:gethostbyaddr(IP),
+  [Hostname] = element(2, Hostent),
+  net_kernel:connect_node(list_to_atom("leoronic@" ++ Hostname)),
+  %^ we make a new atom for each non-local address on the network (constrained).
+  connect(T).
+
 link_to_leoronic() ->
   {ok, Host} = inet:gethostname(),
   if

@@ -13,3 +13,4 @@ fi
 
 echo 'Initializing Leoronic.'
 (erl -name $name -setcookie $cookie -run comrade)
+sleep 2s
