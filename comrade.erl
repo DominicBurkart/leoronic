@@ -7,8 +7,9 @@
          has_tag/2,
          system_info/0,
          alert_all/2,
+         send_file/2,
          send_to_all/1,
-         send_to_all_with_tag/1,
+         send_to_all_with_tag/2,
          get_queue/0,
          in_leoronic/1
        ]).
@@ -42,17 +43,14 @@ loop(S=#state{}) ->
 
     {has, Local_Resource, pID} ->
       case ets:lookup(local_resources, Local_Resource) of
-          [] ->
-            ok,
-          [in_progress] ->
-            ok,
-          Found ->
-            pID ! {requested_resource_at, node(), Local_Resource}
+          [] -> ok;
+          [in_progress] -> ok;
+          Found -> pID ! {requested_resource_at, node(), Local_Resource}
       end,
       loop(S);
 
     {requested_resource_at, Node, Local_Resource} ->
-      if ets:lookup(local_resources, Local_Resource) =:= [] ->
+      case ets:lookup(local_resources, Local_Resource) of  [] ->
         spawn(Node, comrade, send_resource, node()),
         ets:insert(local_resources, {Local_Resource, in_progress})
       end,
@@ -75,9 +73,6 @@ loop(S=#state{}) ->
 
   end.
 
-add_tag() ->
-  ok. %TODO
-
 %% end node initialization and general behavior
 
 %% alert_all function
@@ -89,7 +84,7 @@ to_server(Atm, Tsk) ->
 alert_all(Content, [One_Node | Remaining_Nodes], Function) ->
   try
     spawn(comrade, alert_all, [Content, Remaining_Nodes, Function]),
-    try_alert(Node, Function, Content, 1] %throws error if node DNE
+    try_alert(One_Node, Function, Content, 1) %throws error if node DNE
   catch
     exit:Exit -> % at least one node disconnected from the network.
       Actually_Remaining =
@@ -108,12 +103,13 @@ try_alert(Node, Function, Content, NumTries) ->
   spawn(Node, comrade, Function, [Content, self()]),
   receive
     confirmed ->
-      ok,
+      ok
     after 30000 ->
       if NumTries < 10 ->
         io:format("~nUnresponsive node: "),
         io:format(Node),
-        try_alert(Node, Function, Content, NumTries + 1),
+        try_alert(Node, Function, Content, NumTries + 1)
+      end,
       if true ->
         io:format("~nNode did not respond after 10 retries over 5 minutes: "),
         io:format(Node),
@@ -173,85 +169,33 @@ send_file(Filename, [One | Remaining]) ->
     %TODO
     send_file(Filename, Remaining)
   catch
-    exit:Exit -> % at least one node disconnected from the network.
+    exit:Exit -> % lost connection to at least one node.
       Actually_Remaining =
-        [ Nn || Nn <- Remaining_Nodes, lists:member(Nn, nodes())],
+        [ Nn || Nn <- Remaining, lists:member(Nn, nodes())],
       send_file(Filename, Actually_Remaining)
-  end;
+  end.
 
 receive_file(Filename, Pid_source) ->
   ok. %TODO
 
 %% end file management functions
 
-% miscellaneous functions
-
-has_tag(Tag) ->
-  ok. %TODO
-
-has_tag(Tag, Node) ->
-  ok. %TODO
-
-node_tag_list() ->
-  ok. %TODO
-
-full_tag_list() ->
-  ok. %TODO
-
-local_ips() ->
-%collects all IPV4 address on the network, excluding that of this computer.
-%from https://stackoverflow.com/questions/32984215/erlang-finding-my-ip-address
-    {ok, Addrs} = inet:getifaddrs(),
-    {ok, [{ThisIP, _, _}, _ ]} = inet:getif(),
-    [
-         Addr || {_, Opts} <- Addrs, {addr, Addr} <- Opts,
-         Addr =/= {127,0,0,1},
-         Addr =/= ThisIP,
-         size(Addr) == 4
-    ].
-
-search_for_other_workers() ->
-  connect(local_ips()).
-
-connect([IP | T]) ->
-  {_, Hostent} = inet:gethostbyaddr(IP),
-  [Hostname] = element(2, Hostent),
-  net_kernel:connect_node(list_to_atom("leoronic@" ++ Hostname)),
-  %^ we make a new atom for each non-local address on the network (constrained).
-  connect(T).
-
-connect([]) ->
-  ok;
-
-system_info() ->
-  application:start(sasl),
-  application:start(os_mon),
-  [{_, _}, {_, Current_Memory}, {_, _}] = memsup:get_system_memory_data(),
-  [{_, Size, Perc}] = disksup:get_disk_data(),
-  application:stop(os_mon),
-  application:stop(sasl),
-
-  Cores = erlang:system_info(logical_processors_available),
-  if
-    Cores =:= unknown -> % MacOS leaves this unknown
-      [Current_Memory, erlang:system_info(schedulers_online)]; %default: # cores
-    true ->
-      [Current_Memory, Cores]
-  end.
-
-run(CommandString, justlocal) ->
-  spawn(os, cmd, [CommandString]).
+%% misc functions
 
 run_on(Node, CommandString) ->
   spawn(Node, os, cmd, [CommandString]).
 
 run_on_all(CommandString) ->
-  alert_all(run, CommandString).
+  alert_all(CommandString, run).
 
-in_leoronic(CommandString) ->
-  {ok, Tokes, _} = erl_scan:string(CommandString),
-  {ok, Parsed} = erl_parse:parse_exprs(Tokes),
-  {value, Result, _} = erl_eval:exprs(Parsed, []),
-  Result.
+has_tag(Tag, Node) ->
+  ok. %TODO
 
-% end miscellaneous functions
+add_tag(Tag) -> shared:add_tag(Tag). %add tag to node
+del_tag(Tag) -> shared:add_tag(Tag). %delete tag from node
+has_tag(Tag) -> shared:add_tag(Tag). %check if node has tag (returns True or False)
+tags() -> shared:tags(). %return all tags for a node.
+system_info() -> shared:system_info(). %returns [Current_Memory (bytes), Cores (int)]
+run(CommandString) -> shared:run(CommandString).
+in_leoronic(CommandString) -> shared:in_leoronic(CommandString). %run erlang in leoronic
+%% end misc functions

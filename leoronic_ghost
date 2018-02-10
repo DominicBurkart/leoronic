@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+#requires at least one leoronic worker to be running.
+
+name='leoronic_ghost'
+cookie=`cat ~/.leoronic_cookie`
+
+if [ ! -f shared.beam ]; then
+  echo 'Compiling native code: shared.'
+  erlc +native shared.erl
+fi
+
+if [ ! -f comrade.beam ]; then
+  echo 'Compiling native code: ghost.'
+  erlc +native ghost.erl
+fi
+
+echo 'Initializing leoronic ghost.'
+(erl -name $name -setcookie $cookie -run comrade) #TODO make private
+sleep 2s

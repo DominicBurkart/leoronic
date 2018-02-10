@@ -83,9 +83,7 @@ Usage:
   area network. Note that Leoronic is not secure and should not be deployed in
   unsecured networks – it just uses Erlang's magic cookie system for "security."
 
-  Next, we'll want to add commands to the cluster. If you're trying this out in
-  the command line, you'll need to open a second one here to keep the erlang
-  instance created by the first command running. First, source leoronic's
+  Next, we'll want to add commands to the cluster. First, source leoronic's
   utilities file:
 
     source leoronic_utilities
@@ -105,7 +103,7 @@ Usage:
   be run.
 
   Example condition syntax:
-    'queue:is_first;worker:has_file filename.txt'
+    'queue:is_first;worker:has_file filename.txt;worker:has_file otherfile.csv'
 
   Condition syntax list:
     queue:
@@ -135,7 +133,7 @@ Usage:
   every node is connected (and using resources to constantly talk to) every
   other node. For those circumstances, Leoronic provides a framework of "ghost"
   workers that ask for asks and then perform them from the workers in a Leoronic
-  cluster. A single worker running Leoronic can control many workers in a client
+  cluster. A single worker running Leoronic can control many ghosts in a client
   / server setup, or a balance can be struck, with a Leoronic network comprised
   partially of ghosts and partially of workers. The advantage of ghosts is that
   they require less network activity to maintain and allow clusters to scale,
@@ -145,26 +143,34 @@ Usage:
   to run with limited risk of loss if one worker fails).
 
   By default, ghosts connect to the Leoronic worker with the lowest local IP
-  address (if a real number x is passed to the ghost's instantiation program, it
-  scans for active leoronic workers, finds out that there are y active workers,
-  and connects to the ith worker, where i is equal to x mod y). That worker node
-  then receives the tag "clairvoyant" and retains a list of its ghost friends.
-  If that worker has at least two cores, then by default it will designate one
-  core for relaying information between the other workers and the ghosts.
+  address (if a positive integer x is passed to the ghost's instantiation
+  program, it scans for active leoronic workers, finds out that there are y
+  active workers, and connects to the ith worker, where i is equal to x mod y.
+  If an IP address is passed, the ghost connects to that address). That worker
+  node then receives the tag "clairvoyant" and retains a list of its ghost
+  friends. If that worker has at least two cores, then by default it will
+  designate one core for relaying information between the other workers and the
+  ghosts.
 
-  When a ghost asks it for a task, the ghost includes its information (e.g.,
-  number of available cores and memory). The worker finds the first match in its
-  queue and assigns it to the ghost, sending all the relevant files and
-  information for the ghost to complete the task. The worker then marks that
-  task in the queue as running on the ghost, and lets the other workers (if they
-  exist) know. When the worker has completed the task, it lets its clairvoyant
-  know, and the clairvoyant worker updates the other workers (if they exist) so
-  that each worker's queue is up-to-date.
+  When a ghost asks its clairvoyant for a task, the ghost includes its
+  information (e.g., number of available cores and memory). The worker finds the
+  first match in its queue and assigns it to the ghost, sending all the relevant
+  files and information for the ghost to complete the task. The worker then
+  marks that task in the queue as running on the ghost, and lets the other
+  workers (if they exist) know. When the worker has completed the task, it lets
+  its clairvoyant know, and the clairvoyant worker updates the other workers
+  (if they exist) so that each worker's queue is up-to-date.
 
   If there are no tasks that the ghost can accomplish, the clairvoyant worker
   tells the ghost to listen indefinitely for more tasks. If the clairvoyant
   receives a new task for the worker, then it lets the worker know; otherwise,
-  the worker continues to listen silently unless the
+  the worker continues to listen silently.
+
+  If at any point a ghost loses contact with its clairvoyant and is unable to
+  reconnect, or the clairvoyant takes more than five seconds to respond to a
+  work request, the ghost will by default connect to the worker with the
+  second-lowest IP address (or the one with the lowest, if they aren't
+  connected).
 
 
 Writing code for leoronic:
@@ -188,7 +194,7 @@ Writing code for leoronic:
   File output, on the other hand, is not modified. Thus, any files output by a
   task run on leoronic should have unique names, or else earlier-run tasks run
   on the same node will have their output data overwritten. This could be
-  intentional – e.g., appending a relevant solution to file full of solutions.
+  intentional – e.g., appending a relevant solution to a file full of solutions.
 
   Best practice for leoronic is to keep all file i/o in the local directory or
   its subdirectories, and to instantiate leoronic while the working directory is
@@ -202,5 +208,5 @@ Writing code for leoronic:
   the working directory as you see fit – and they'll stay changed until the end
   of the task.
 
-  It's generally good practice to run code that requires outside libraries in
-  virtual environments, so that you can control and maintain your dependencies.
+  It's generally good practice use virtual environments when dealing with
+  imported libraries, so that you can control and maintain your dependencies.

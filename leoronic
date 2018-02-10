@@ -6,8 +6,13 @@ cookie='q.fSODfIBTNYadfobpiADGFMLRF90fd7S0FG94RNVS,;Zs]dbf[gfjadgmkw3vx[pOI09]]'
 touch ~/.leoronic_cookie
 echo $cookie > ~/.leoronic_cookie
 
+if [ ! -f shared.beam ]; then
+  echo 'Compiling native code: shared.'
+  erlc +native shared.erl
+fi
+
 if [ ! -f comrade.beam ]; then
-  echo 'Compiling native code.'
+  echo 'Compiling native code: comrade.'
   erlc +native comrade.erl
 fi
 
