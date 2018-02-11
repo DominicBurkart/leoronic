@@ -1,6 +1,6 @@
 -module(comrade). %get it? because it's a functional (classless) program?
 -export([
-         init/0,
+         start/0,
          add_tag/1,
          del_tag/1,
          has_tag/1,
@@ -11,20 +11,21 @@
          send_to_all/1,
          send_to_all_with_tag/2,
          get_queue/0,
-         in_leoronic/1
+         in_leoronic/1,
+         search_for_other_workers/1
        ]).
 -record(state, {mes, data}).
 
 %% node initialization and general behavior
 
-init() ->
+start() ->
   register(leoronic_local_pid, self()),
   ets:new(local_queue, [set, named_table]),
   ets:new(local_resources, [set, named_table]),
   ets:new(node_tags, [set, named_table]),
-  io:format("Beginning search for other workers on the LAN."),
-  spawn(search_for_other_workers),
-  io:format("Initialization complete. Ready for tasks."),
+  io:format("Beginning search for other workers on the LAN.~n"),
+  spawn(node(), comrade, search_for_other_workers, [""]),
+  io:format("Initialization complete. Ready for tasks.~n"),
   loop(#state{mes = orddict:new(),
               data = orddict:new()}).
 
@@ -51,7 +52,7 @@ loop(S=#state{}) ->
 
     {requested_resource_at, Node, Local_Resource} ->
       case ets:lookup(local_resources, Local_Resource) of  [] ->
-        spawn(Node, comrade, send_resource, node()),
+        spawn(Node, comrade, send_resource, [node()]),
         ets:insert(local_resources, {Local_Resource, in_progress})
       end,
       loop(S);
@@ -121,6 +122,9 @@ try_alert(Node, Function, Content, NumTries) ->
 
 %% work queue functions
 
+consider_queue([]) ->
+  consider_queue().
+
 consider_queue() -> %evaluates whether to start a new task.
   ok. %TODO
 
@@ -165,7 +169,7 @@ send_to_all_with_tag(Filename, Tag) ->
 
 send_file(Filename, [One | Remaining]) ->
   try
-    Receiver = spawn(One, comrade, receive_file, self()),
+    Receiver = spawn(One, comrade, receive_file, [self()]),
     %TODO
     send_file(Filename, Remaining)
   catch
@@ -198,4 +202,5 @@ tags() -> shared:tags(). %return all tags for a node.
 system_info() -> shared:system_info(). %returns [Current_Memory (bytes), Cores (int)]
 run(CommandString) -> shared:run(CommandString).
 in_leoronic(CommandString) -> shared:in_leoronic(CommandString). %run erlang in leoronic
+search_for_other_workers(V) -> shared:search_for_other_workers().
 %% end misc functions

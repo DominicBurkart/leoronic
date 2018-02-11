@@ -52,16 +52,16 @@ connect([]) -> ok. %all done!
 system_info() ->
   application:start(sasl),
   application:start(os_mon),
-  [{_, _}, {_, Current_Memory}, {_, _}] = memsup:get_system_memory_data(),
+  [{_, Total_Memory}, {_, Current_Memory}, {_, _}] = memsup:get_system_memory_data(),
   application:stop(os_mon),
   application:stop(sasl),
 
   Cores = erlang:system_info(logical_processors_available),
   if
     Cores =:= unknown -> % MacOS leaves this unknown
-      [Current_Memory, erlang:system_info(schedulers_online)]; %default: # cores
+      [{total_memory, Total_Memory}, {free_memory, Current_Memory}, {cores, erlang:system_info(schedulers_online)}]; %default: # cores
     true ->
-      [Current_Memory, Cores]
+      [{total_memory, Total_Memory}, {free_memory, Current_Memory}, {cores, Cores}]
   end.
 
 run(CommandString) ->
