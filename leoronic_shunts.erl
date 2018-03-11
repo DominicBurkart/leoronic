@@ -1,11 +1,11 @@
 -module(leoronic_shunts).
 -export([
-          link_to_leoronic,
-          add_shunt/1,
-          del_shunt/1,
-          add_tag_shunt/1,
-          del_tag_shunt/1
-        ]).
+  link_to_leoronic/0,
+  add_shunt/1,
+  del_shunt/1,
+  add_tag_shunt/1,
+  del_tag_shunt/1
+]).
 
 %% shunt functions
 
@@ -16,30 +16,26 @@ connect([IP | T]) ->
   %^ we make a new atom for each non-local address on the network (constrained).
   connect(T).
 
-link_to_leoronic() ->
-  {ok, Host} = inet:gethostname(),
-  if
-    net_kernel:connect_node(list_to_atom("leoronic@"++Host)) =:= false ->
-      connect(local_ips()) %only connect to other machines if necessary.
-  end.
-
-add(Task) ->
-  [Worker | _ ] = nodes(connected),
+add(TaskString) ->
+  [Worker | _] = nodes(connected),
+  String_split = "|||",
   %TODO: deal with file uploading
-  spawn(Worker, comrade, add_or_update_task, [Task]).
+  Task = string:tokens(TaskString, String_split),
+  spawn(Worker, comrade, add_or_update_task, Task).
 
 del(Task) ->
-  [Worker | _ ] = nodes(connected),
+  [Worker | _] = nodes(connected),
   spawn(Worker, comrade, cancel_task, [Task]).
 
 add_tag(Tag) ->
-if
-  net_kernel:connect_node(list_to_atom("leoronic@"++Host)) =:= false ->
-    %make this fail
+  if
+    net_kernel:connect_node(list_to_atom("leoronic@" ++ Host)) =:= false ->
+      ok %make this fail
   %TODO
-end.
+  end.
 
 del_tag(Tag) ->
   ok. %TODO
 
+link_to_leoronic() -> shared:link_to_leoronic().
 %% end shunt functions

@@ -1,19 +1,19 @@
 -module(comrade). %get it? because it's a functional (classless) program?
 -export([
-         start/0,
-         add_tag/1,
-         del_tag/1,
-         has_tag/1,
-         has_tag/2,
-         system_info/0,
-         alert_all/2,
-         send_file/2,
-         send_to_all/1,
-         send_to_all_with_tag/2,
-         get_queue/0,
-         in_leoronic/1,
-         search_for_other_workers/1
-       ]).
+  start/0,
+  add_tag/1,
+  del_tag/1,
+  has_tag/1,
+  has_tag/2,
+  system_info/0,
+  alert_all/2,
+  send_file/2,
+  send_to_all/1,
+  send_to_all_with_tag/2,
+  get_queue/0,
+  in_leoronic/1,
+  search_for_other_workers/1
+]).
 -record(state, {mes, data}).
 
 %% node initialization and general behavior
@@ -27,9 +27,9 @@ start() ->
   spawn(node(), comrade, search_for_other_workers, [""]),
   io:format("Initialization complete. Ready for tasks.~n"),
   loop(#state{mes = orddict:new(),
-              data = orddict:new()}).
+    data = orddict:new()}).
 
-loop(S=#state{}) ->
+loop(S = #state{}) ->
   receive
 
     {add_or_update, Task} ->
@@ -44,14 +44,14 @@ loop(S=#state{}) ->
 
     {has, Local_Resource, pID} ->
       case ets:lookup(local_resources, Local_Resource) of
-          [] -> ok;
-          [in_progress] -> ok;
-          Found -> pID ! {requested_resource_at, node(), Local_Resource}
+        [] -> ok;
+        [in_progress] -> ok;
+        Found -> pID ! {requested_resource_at, node(), Local_Resource}
       end,
       loop(S);
 
     {requested_resource_at, Node, Local_Resource} ->
-      case ets:lookup(local_resources, Local_Resource) of  [] ->
+      case ets:lookup(local_resources, Local_Resource) of [] ->
         spawn(Node, comrade, send_resource, [node()]),
         ets:insert(local_resources, {Local_Resource, in_progress})
       end,
@@ -69,7 +69,7 @@ loop(S=#state{}) ->
       loop(S);
 
     Unknown ->
-      io:format("Unknown message: ~p~n",[Unknown]),
+      io:format("Unknown message: ~p~n", [Unknown]),
       loop(S)
 
   end.
@@ -80,7 +80,7 @@ loop(S=#state{}) ->
 
 to_server(Atm, Tsk) ->
   {ok, H} = inet:gethostname(),
-  {leoronic_local_pid, list_to_atom("leoronic@"++H)} ! {Atm, Tsk}.
+  {leoronic_local_pid, list_to_atom("leoronic@" ++ H)} ! {Atm, Tsk}.
 
 alert_all(Content, [One_Node | Remaining_Nodes], Function) ->
   try
@@ -89,7 +89,7 @@ alert_all(Content, [One_Node | Remaining_Nodes], Function) ->
   catch
     exit:Exit -> % at least one node disconnected from the network.
       Actually_Remaining =
-        [ Nn || Nn <- Remaining_Nodes, lists:member(Nn, nodes())],
+        [Nn || Nn <- Remaining_Nodes, lists:member(Nn, nodes())],
       alert_all(Content, Actually_Remaining, Function)
   end;
 
@@ -105,17 +105,17 @@ try_alert(Node, Function, Content, NumTries) ->
   receive
     confirmed ->
       ok
-    after 30000 ->
-      if NumTries < 10 ->
-        io:format("~nUnresponsive node: "),
-        io:format(Node),
-        try_alert(Node, Function, Content, NumTries + 1)
-      end,
-      if true ->
-        io:format("~nNode did not respond after 10 retries over 5 minutes: "),
-        io:format(Node),
-        ok
-      end
+  after 30000 ->
+    if NumTries < 10 ->
+      io:format("~nUnresponsive node: "),
+      io:format(Node),
+      try_alert(Node, Function, Content, NumTries + 1)
+    end,
+    if true ->
+      io:format("~nNode did not respond after 10 retries over 5 minutes: "),
+      io:format(Node),
+      ok
+    end
   end.
 
 %% end alert_all function
@@ -165,7 +165,7 @@ send_to_all(Filename) ->
   send_file(Filename, nodes()).
 
 send_to_all_with_tag(Filename, Tag) ->
-  send_file(Filename, [ N || N <- nodes(), has_tag(Tag, N)]).
+  send_file(Filename, [N || N <- nodes(), has_tag(Tag, N)]).
 
 send_file(Filename, [One | Remaining]) ->
   try
@@ -175,7 +175,7 @@ send_file(Filename, [One | Remaining]) ->
   catch
     exit:Exit -> % lost connection to at least one node.
       Actually_Remaining =
-        [ Nn || Nn <- Remaining, lists:member(Nn, nodes())],
+        [Nn || Nn <- Remaining, lists:member(Nn, nodes())],
       send_file(Filename, Actually_Remaining)
   end.
 

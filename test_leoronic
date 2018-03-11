@@ -19,7 +19,9 @@ touch ~/.leoronic_cookie
 echo $cookie > ~/.leoronic_cookie
 
 echo 'Compiling native code.'
+erlc +native shared.erl
 erlc +native comrade.erl
+erlc +native leoronic_shunts.erl
 
 echo 'Initializing first instance of Leoronic.'
 ( erl -name $name -setcookie $cookie -run comrade )
@@ -80,3 +82,4 @@ test_leoronic_add_tasks_from_str
 test_leoronic_del_task
 
 rm test_cmd_file
+rm ~/.leoronic_cookie

@@ -1,16 +1,17 @@
 -module(shared). %utilities used by both comrades and ghosts.
 -export([
-         add_tag/1,
-         del_tag/1,
-         has_tag/1,
-         tags/0,
-         system_info/0,
-         run/1,
-         in_leoronic/1,
-         connect/1,
-         local_ips/0,
-         search_for_other_workers/0
-       ]).
+  add_tag/1,
+  del_tag/1,
+  has_tag/1,
+  tags/0,
+  system_info/0,
+  run/1,
+  in_leoronic/1,
+  connect/1,
+  local_ips/0,
+  search_for_other_workers/0,
+  link_to_leoronic/0
+]).
 
 % miscellaneous functions
 
@@ -29,14 +30,14 @@ del_tag(Tag) ->
 local_ips() ->
 %collects all IPV4 address on the network, excluding that of this computer.
 %from https://stackoverflow.com/questions/32984215/erlang-finding-my-ip-address
-    {ok, Addrs} = inet:getifaddrs(),
-    {ok, [{ThisIP, _, _}, _ ]} = inet:getif(),
-    [
-         Addr || {_, Opts} <- Addrs, {addr, Addr} <- Opts,
-         Addr =/= {127,0,0,1},
-         Addr =/= ThisIP,
-         size(Addr) == 4
-    ].
+  {ok, Addrs} = inet:getifaddrs(),
+  {ok, [{ThisIP, _, _}, _]} = inet:getif(),
+  [
+    Addr || {_, Opts} <- Addrs, {addr, Addr} <- Opts,
+    Addr =/= {127, 0, 0, 1},
+    Addr =/= ThisIP,
+    size(Addr) == 4
+  ].
 
 search_for_other_workers() -> connect(local_ips()).
 
@@ -59,7 +60,9 @@ system_info() ->
   Cores = erlang:system_info(logical_processors_available),
   if
     Cores =:= unknown -> % MacOS leaves this unknown
-      [{total_memory, Total_Memory}, {free_memory, Current_Memory}, {cores, erlang:system_info(schedulers_online)}]; %default: # cores
+      [{total_memory, Total_Memory},
+        {free_memory, Current_Memory},
+        {cores, erlang:system_info(schedulers_online)}]; %default: # cores
     true ->
       [{total_memory, Total_Memory}, {free_memory, Current_Memory}, {cores, Cores}]
   end.
@@ -75,6 +78,13 @@ in_leoronic(CommandString) ->
       Result;
     {error, Error} ->
       error
+  end.
+
+link_to_leoronic() ->
+  {ok, Host} = inet:gethostname(),
+  case net_kernel:connect_node(list_to_atom("leoronic@" ++ Host)) of
+    false ->
+      connect(local_ips()) %only connect to other machines if necessary
   end.
 
 % end miscellaneous functions
