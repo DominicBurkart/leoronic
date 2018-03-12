@@ -1,10 +1,10 @@
 -module(leoronic_shunts).
 -export([
   link_to_leoronic/0,
-  add_shunt/1,
-  del_shunt/1,
-  add_tag_shunt/1,
-  del_tag_shunt/1
+  add/1,
+  del/1,
+  add_tag/1,
+  del_tag/1
 ]).
 
 %% shunt functions
@@ -16,23 +16,32 @@ connect([IP | T]) ->
   %^ we make a new atom for each non-local address on the network (constrained).
   connect(T).
 
-add(TaskString) ->
+add(Task) ->
   [Worker | _] = nodes(connected),
-  String_split = "|||",
   %TODO: deal with file uploading
-  Task = string:tokens(TaskString, String_split),
-  spawn(Worker, comrade, add_or_update_task, Task).
+  if
+    length(Task) == 8 ->
+      % give it an ID (current time and hostname)
+      {ok, LocalHost} = inet:gethostname(),
+      spawn(Worker, comrade, add_or_update_task, Task ++ [[erlang:system_time(), LocalHost]]);
+
+    length(Task) == 9 ->
+      spawn(Worker, comrade, add_or_update_task, Task) end.
 
 del(Task) ->
   [Worker | _] = nodes(connected),
   spawn(Worker, comrade, cancel_task, [Task]).
 
 add_tag(Tag) ->
+  {ok, LocalHost} = inet:gethostname(),
+  Is_Connected = net_kernel:connect_node(list_to_atom("leoronic@" ++ LocalHost)),
   if
-    net_kernel:connect_node(list_to_atom("leoronic@" ++ Host)) =:= false ->
-      ok %make this fail
-  %TODO
+    Is_Connected == false -> ok; %todo yell at the user
+    Is_Connected == true -> ok % TODO
   end.
+
+
+
 
 del_tag(Tag) ->
   ok. %TODO

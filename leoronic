@@ -17,5 +17,5 @@ if [ ! -f comrade.beam ]; then
 fi
 
 echo 'Initializing Leoronic.'
-(erl -name $name -setcookie $cookie -run comrade)
+(erl +c true -name $name -setcookie $cookie -run comrade)
 sleep 2s

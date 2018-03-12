@@ -6,7 +6,8 @@ leoronic_task_fields=('int: Minimum memory (in bytes) needed for the task.' \
 'str: Allow other concurrent tasks? true or false.' \
 'str: Required conditions for running (split by ; ).' \
 'str: Paths to necessary files (split by ; ).' \
-'str: Bash commands that compose task.')
+'str: Bash commands that compose task.') \
+'[str: optional identifier of the task.]'
 
 cookie=`cat ~/.leoronic_cookie`
 

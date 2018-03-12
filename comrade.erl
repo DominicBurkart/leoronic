@@ -106,15 +106,15 @@ try_alert(Node, Function, Content, NumTries) ->
     confirmed ->
       ok
   after 30000 ->
-    if NumTries < 10 ->
-      io:format("~nUnresponsive node: "),
-      io:format(Node),
-      try_alert(Node, Function, Content, NumTries + 1)
-    end,
-    if true ->
-      io:format("~nNode did not respond after 10 retries over 5 minutes: "),
-      io:format(Node),
-      ok
+    if
+      NumTries < 10 ->
+        io:format("~nUnresponsive node: "),
+        io:format(Node),
+        try_alert(Node, Function, Content, NumTries + 1);
+      true ->
+        io:format("~nNode did not respond after 10 retries over 5 minutes: "),
+        io:format(Node),
+        ok
     end
   end.
 
@@ -173,9 +173,8 @@ send_file(Filename, [One | Remaining]) ->
     %TODO
     send_file(Filename, Remaining)
   catch
-    exit:Exit -> % lost connection to at least one node.
-      Actually_Remaining =
-        [Nn || Nn <- Remaining, lists:member(Nn, nodes())],
+    exit -> % lost connection to at least one node.
+      Actually_Remaining = [Nn || Nn <- Remaining, lists:member(Nn, nodes())],
       send_file(Filename, Actually_Remaining)
   end.
 

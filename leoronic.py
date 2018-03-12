@@ -1,3 +1,5 @@
+import socket
+
 leoronic_directory = "~/Documents/cute_coding/leoronic"
 
 __unsent_tasks__ = []
@@ -25,17 +27,18 @@ def o(obj, fname):
     return fname
 
 
-def __to_task__(task_string, conditions=None, id=None, source="TODO", directory=leoronic_directory):
+def __to_task__(task_string, conditions=None, id=None, source=socket.gethostname().split(".")[0],
+                directory=leoronic_directory):
     '''
 
     :param task_string:
     :param conditions:
     :param id:
-    :param source: str. unique identifier for this machine.
+    :param source: str. should be the unique identifier for this machine.
     :return:
     '''
     import time
-    id = str(time.time()) + "_" + source  # todo find a good source variable
+    id = str(time.time()) + "_" + str(source)
     raise NotImplementedError
     return id
 
@@ -45,7 +48,10 @@ def __send_tasks__():
         raise NotImplementedError
         # run add_shunt in leoronic_shunts.erl
 
+
 def wait_for():
+    # write an erlang function that terminates when a process has completed.
+    raise NotImplementedError
 
 
 def run_and_return(functions):
