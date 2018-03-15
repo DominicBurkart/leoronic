@@ -38,4 +38,7 @@ def funcwrap(picklefile, outputfile=None, remove_pickle=True):
 if __name__ == "__main__":
     import sys
 
-    funcwrap(sys.argv[1])
+    if len(sys.argv) >= 2:
+        funcwrap(sys.argv[1], outputfile=sys.argv[2])
+    else:
+        funcwrap(sys.argv[1])

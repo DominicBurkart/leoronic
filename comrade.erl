@@ -197,7 +197,6 @@ has_tag(Tag, Node) ->
 add_tag(Tag) -> shared:add_tag(Tag). %add tag to node
 del_tag(Tag) -> shared:add_tag(Tag). %delete tag from node
 has_tag(Tag) -> shared:add_tag(Tag). %check if node has tag (returns True or False)
-tags() -> shared:tags(). %return all tags for a node.
 system_info() -> shared:system_info(). %returns [Current_Memory (bytes), Cores (int)]
 run(CommandString) -> shared:run(CommandString).
 in_leoronic(CommandString) -> shared:in_leoronic(CommandString). %run erlang in leoronic

@@ -1,6 +1,9 @@
 import socket
+import time
 
-leoronic_directory = "~/Documents/cute_coding/leoronic"
+local_leoronic_directory = "~/Documents/cute_coding/leoronic"
+
+host = socket.gethostname().split(".")[0]
 
 __unsent_tasks__ = []
 
@@ -27,49 +30,84 @@ def o(obj, fname):
     return fname
 
 
-def __to_task__(task_string, conditions=None, id=None, source=socket.gethostname().split(".")[0],
-                directory=leoronic_directory):
+def __to_task__(task_string, conditions=None, necessary_files=None,
+                id=None, source=host,
+                change_filenames=True, directory=local_leoronic_directory):
     '''
 
-    :param task_string:
-    :param conditions:
-    :param id:
+    :param task_string: commands to be run on leoronic.
+    :param conditions: conditions necessary for the job to be run.
+    :param id: optional custom id for the job.
     :param source: str. should be the unique identifier for this machine.
     :return:
     '''
-    import time
-    id = str(time.time()) + "_" + str(source)
+
+    # input validation
+    try:
+        assert task_string is not None and type(task_string) == str
+        assert "\n" not in task_string
+        assert '"' not in task_string
+
+        assert source is not None and type(source) == str
+        assert "\n" not in source
+        assert '"' not in source
+
+        if conditions is not None:
+            assert "\n" not in conditions
+            assert '"' not in conditions
+
+        if necessary_files is not None:
+            assert "\n" not in necessary_files
+            assert '"' not in necessary_files
+
+    except AssertionError:
+        raise TypeError("Bad arguments passed to leoronic.__to_task__. Assertion failed – see output above.")
+
+    id = str(time.time()) + "_" + source
+
     raise NotImplementedError
-    return id
+    # __unsent_tasks__.append(starg)
+    # return id
 
 
 def __send_tasks__():
-    for t in __unsent_tasks__:
-        raise NotImplementedError
-        # run add_shunt in leoronic_shunts.erl
+    import subprocess
+    outstr = "\n".join(__unsent_tasks__)
+    cd = 'cd ' + local_leoronic_directory
+    imp = 'source leoronic_utilities'
+    v = 'leoronic_add_tasks_from_str "' + outstr + '"'
+    subprocess.run(";".join([cd, imp, v]), shell=True, check=True)
 
 
-def wait_for():
-    # write an erlang function that terminates when a process has completed.
+def wait_for_all(ids, ignore_unknown=False):
+    raise NotImplementedError
+
+
+def collect_leoronic_file(basename, delete=True):  # todo returns absolute path of local file after transferring it.
     raise NotImplementedError
 
 
 def run_and_return(functions):
     '''
-    use functools.partial(func, *args, **keywords) to generate simplified functions
+    use functools.partial(func, *args, **keywords) to generate functions with parameters already inside of them.
 
     :param functions: iterable of functions to be called
     :return:
     '''
     import time
+    import os
     now = str(time.time()).replace(".", "_")
     i = 0
     ids = []
+    results = []
     for f in functions:
-        fpickle = o(f, now + "_" + str(i))
-        id = __to_task__("python3 funcwrap.py " + fpickle)
-        # TODO we need to send_file to this node.
+        basename = o(f, now + "_" + host + "_" + str(i))  # writes a pickle file and returns the file's basename
+        fpickle = os.path.abspath(basename)  # absolute path to the pickle we just made
+        res = basename + "_output"
+        id = __to_task__("python3 funcwrap.py " + fpickle + " " + res, necessary_files=[fpickle])
         ids.append(id)
+        results.append(res)
         i += 1
     __send_tasks__()
-    map(wait_for, ids)
+    wait_for_all(ids)
+    return [l(collect_leoronic_file(res)) for res in results]  # collects and unpickles each result pickle file.
