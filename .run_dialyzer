@@ -1,0 +1,7 @@
+erlc +debug_info leoronic/*.erl
+dialyzer --check_plt
+if [ "$(dialyzer . | tail -n 1)" = "done (warnings were emitted)" ]
+then
+    dialyzer .
+    exit 1
+fi

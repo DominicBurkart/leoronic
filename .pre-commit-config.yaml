@@ -1,0 +1,21 @@
+repos:
+- repo: local
+  hooks:
+#    - id: dialyzer
+#      name: dialyzer
+#      language: system
+#      entry: bash .run_dialyzer
+#      require_serial: true
+    - id: elvis
+      name: elvis
+      language: system
+      entry: ./.elvis rock
+      require_serial: true
+- repo: https://github.com/jumanjihouse/pre-commit-hooks
+  rev: 1.11.0
+  hooks:
+    - id: forbid-binary
+    - id: require-ascii
+    - id: script-must-have-extension
+    - id: script-must-not-have-extension
+    - id: shellcheck # https://github.com/koalaman/shellcheck#installing
