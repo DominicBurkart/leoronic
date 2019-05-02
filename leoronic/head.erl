@@ -180,7 +180,7 @@ get_runnable_tasks() ->
   ask_for_worker_info(Workers, Evaluator),
   receive
     {final, FinalResponse} -> FinalResponse
-  after 2 ->
+  after 2000 ->
     Evaluator ! {eager_eval},
     receive
       {final, Response} -> Response;
@@ -221,7 +221,7 @@ job_checker_scheduler(LastRan, LastIdle) ->
     {ReturnPid, get_times} ->
       ReturnPid ! {times, LastRan, LastIdle},
       job_checker_scheduler(LastRan, LastIdle)
-  after 60 * 2 ->
+  after 1000 * 60 * 2 ->
     job_checker(LastRan, LastIdle),
     job_checker_scheduler(LastRan, LastIdle)
   end.
@@ -346,6 +346,8 @@ loop() ->
       loop();
 
     stop ->
+      register(loop_head_check,
+        spawn(node(), leoronic, loop_check_should_be_head, [])),
       ok;
 
     {'EXIT', Pipe, Reason} ->

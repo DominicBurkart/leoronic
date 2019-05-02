@@ -24,15 +24,87 @@ head_pid/0, should_be_head/1, head/0
   perform_task/1,
   send_system_info/1
 ]).
+-export([start/0, stop/0, init/0]).
+
+
+start() ->
+  spawn(leoronic, init, []).
+
+
+stop() ->
+  leoronic ! stop.
+
+
+init() ->
+  register(leoronic, self()),
+  process_flag(trap_exit, true),
+  spawn(node(), leoronic, alert_new_node, []),
+  ets:new(kids, [set, named_table]),
+  case check_should_be_head(node()) of
+    true ->
+      spawn(node(), head, head, []);
+    false ->
+      register(loop_head_check, spawn(node(), leoronic, loop_check_should_be_head, [])),
+      ets:insert(kids, {loop_head_check})
+  end,
+  loop().
+
+
+loop() ->
+  receive
+    {new_node_initialized} ->
+      spawn(node(), leoronic, check_should_be_head, []),
+      loop();
+    stop ->
+      [Kid ! stop || {Kid} <- ets:tab2list(kids)],
+      exit(normal)
+  end.
+
+
+check_should_be_head() ->
+  case should_be_head(node()) of
+    true ->
+      case whereis(head) of
+        undefined ->
+          spawn(node(), head, head, []),
+          is_head;
+        _ ->
+          not_head
+      end;
+    false ->
+      not_head
+  end.
+
+
+loop_check_should_be_head() ->
+  receive
+    stop ->
+      ok
+  after 1000 * 60 * 2 ->
+    case check_should_be_head() of
+      is_head ->
+        ok;
+      not_head ->
+        loop_check_should_be_head()
+    end
+  end.
+
+
+alert_new_node() ->
+  [{leoronic, N} ! new_node_initialized || N <- nodes()].
+
 
 impute_task_values_helper(Old, []) ->
   Old;
 
+
 impute_task_values_helper(Old, [[UpdatingKey, UpdatingValue] | New]) ->
   impute_task_values_helper(lists:keyreplace(UpdatingKey, 1, Old, UpdatingValue), New).
 
+
 impute_task_values(Task, Values) ->
   impute_task_values_helper(Task, [Values | {has_run, true}]).
+
 
 perform_task(Task) ->
   head_pid() !
@@ -52,19 +124,19 @@ send_system_info(HeadPid) -> % yields memory in MB
   application:stop(sasl),
 
   Cores = erlang:system_info(logical_processors_available),
-  case Cores of
-    unknown -> % MacOS leaves this unknown
-      HeadPid ! {system_info,
-        {node(), [
-          {total_memory, TotalMemory / 1000000},
-          {free_memory, CurrentMemory / 1000000},
-          {cores, erlang:system_info(schedulers_online)}
-        ]}};
-    _ ->
-      HeadPid ! {system_info,
-        [ {node, node()},
-          {total_memory, TotalMemory / 1000000},
-          {free_memory, CurrentMemory / 1000000},
-          {cores, Cores}
-        ]}
-  end.
+  CoreReport =
+    case Cores of
+      unknown -> % MacOS leaves this unknown
+        {cores, erlang:system_info(schedulers_online)};
+      _ ->
+        {cores, Cores}
+    end,
+  HeadPid ! {
+    system_info,
+    {[
+      {node, node()},
+      {total_memory, TotalMemory / 1000000},
+      {free_memory, CurrentMemory / 1000000},
+      CoreReport
+    ]}
+  }.
