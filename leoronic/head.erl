@@ -29,12 +29,13 @@ number_of_heads() ->
   end.
 
 
-sorted_nodes() -> lists:sort([nodes() | node()]).
+sorted_nodes() ->
+  lists:sort(nodes() ++ [node()]).
 
 
-should_be_head(Node) ->
+should_be_head(Node) when is_atom(Node) ->
   HeadNodes = lists:sublist(sorted_nodes(), number_of_heads()),
-  lists:member(HeadNodes, Node).
+  lists:member(Node, HeadNodes).
 
 
 worker_head_tuples() ->
@@ -42,16 +43,10 @@ worker_head_tuples() ->
   IndexedNodes = indexed(Nodes),
   NHeads = number_of_heads(),
   HeadIndexForEachNode =
-    lists:seq(1, NHeads) ++
-    lists:map(
-      fun(I) -> I rem NHeads + 1 end,
-      lists:seq(NHeads, length(IndexedNodes))
-    ),
+    lists:seq(1, NHeads) ++ % each head node is its own head.
+    [I rem NHeads + 1 || I <- lists:seq(NHeads, length(IndexedNodes))],
   HeadProcesses =
-    lists:map(
-      fun(I) -> {head, element(2, lists:keyfind(I, 1, IndexedNodes))} end,
-      HeadIndexForEachNode
-    ),
+    [{head, element(2, lists:keyfind(I, 1, IndexedNodes))} || I <- HeadIndexForEachNode],
   lists:zip(HeadProcesses, Nodes).
 
 
@@ -62,9 +57,9 @@ worker_pids(Head) ->
 head_pid() ->
   case should_be_head(node()) of
     true ->
-      lists:search(node(), heads());
+      lists:keysearch(node(), 2, heads());
     false ->
-      element(1, lists:keyfind(2, node(), worker_head_tuples()))
+      element(1, lists:keyfind(node(), 2, worker_head_tuples()))
   end.
 
 
@@ -97,7 +92,7 @@ match_available_to_requested_helper(Available, Requested, FoundMatches) ->
   [SmallestA | RestAvailable] = Available,
   [BiggestR | RestRequested] = Requested,
   IsMatch = (element(1, SmallestA) > element(1, BiggestR))
-      and (element(2, SmallestA) > element(2, BiggestR)),
+    and (element(2, SmallestA) > element(2, BiggestR)),
   case IsMatch of
     true ->
       match_available_to_requested(
@@ -305,7 +300,7 @@ loop() ->
 
     {ReturnPid, get_next_tasks} ->
       RunningTaskIds = [element(1, Task) || Task <- ets:tab2list(running_tasks)],
-      UnformattedTasks =
+      UnformattedTaskMatch =
         ets:select(tasks,
           [{
             {'$1',
@@ -328,15 +323,21 @@ loop() ->
             [not_in_match_specification('$1', RunningTaskIds)],
             []
           }], 5),
-      ReturnPid ! {tasks, [[{id, Id} | Task] || {Id, Task} <- UnformattedTasks]},
+      ReturnPid !
+        case UnformattedTaskMatch of
+          '$end_of_table' ->
+            {tasks, []};
+          {UnformattedTasks, _Continuation} ->
+            {tasks, [[{id, Id} | Task] || {Id, Task} <- UnformattedTasks]}
+        end,
       loop();
 
     {ReturnPid, prune_running_task_record} ->
       RunningTasks = ets:tab2list(running_tasks),
-      Infos = [{TaskId, erlang:process_info(Pid, status)} ||  {TaskId, Pid} <- RunningTasks],
+      Infos = [{TaskId, erlang:process_info(Pid, status)} || {TaskId, Pid} <- RunningTasks],
       BadTaskIds = [
         BadId || {BadId, _} <- lists:filter(
-          fun (E) ->
+          fun(E) ->
             element(2, E) =:= undefined
           end,
           Infos

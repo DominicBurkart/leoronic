@@ -15,20 +15,43 @@
 -import(head,
 [heads/0, head_pid/0]
 ).
+-import(
+utils,
+[git_root_directory/0]
+).
 -export([start/0, stop/0, init/0]).
-
+-dialyzer({nowarn_function, [connect_to_pipe_and_loop/0, init/0]}).
+% todo constrain this to the call to open_port (dialyzer can't handle it).
 
 start() ->
   spawn(port, init, []).
+
 stop() ->
   leoronic_port ! stop.
 
+pipe_name() ->
+  filename:join(git_root_directory(), "leoronic.pipe").
 
 init() ->
   register(leoronic_port, self()),
   process_flag(trap_exit, true),
-  os:cmd("mkfifo leoronic.pipe"),
-  loop(open_port("leoronic.pipe", [eof])).
+  make_pipe(),
+  connect_to_pipe_and_loop().
+
+make_pipe() ->
+  os:cmd("mkfifo " ++ pipe_name()).
+
+remove_pipe() ->
+  os:cmd("rm " ++ pipe_name()).
+
+connect_to_pipe_and_loop() ->
+  PipeName = pipe_name(),
+  case open_port(PipeName, [eof]) of
+    Pipe when erlang:is_port(Pipe) ->
+      loop(Pipe);
+    Error ->
+      Error
+  end.
 
 loop(Pipe) ->
   receive
@@ -58,6 +81,8 @@ loop(Pipe) ->
           head_resp_to_pipe(Pipe, idle, false)
       end,
       loop(Pipe);
+    {Pipe, eof} ->
+      connect_to_pipe_and_loop();
     {task_complete, CompletedTask} ->
       Pipe ! {self(), {data, task_to_str(CompletedTask)}},
       loop(Pipe);
@@ -65,18 +90,18 @@ loop(Pipe) ->
       Pipe ! {self(), close},
       receive
         {Pipe, closed} ->
-          os:cmd("rm leoronic.pipe"),
+          remove_pipe(),
           exit(normal)
       end;
     {'EXIT', Pipe, Reason} ->
-      os:cmd("rm leoronic.pipe"),
+      remove_pipe(),
       exit(port_terminated)
   end.
 
 
 format_task_str(TaskStr) ->
   [Await, CPUS, Memory, Storage, Dockerless, Container] =
-    string:tokens(TaskStr, "////"), % todo desuck this
+    string:tokens(TaskStr, "\""), % todo desuck this
   [
     {port_pid, self()},
     {await, Await},
@@ -106,13 +131,14 @@ task_to_str(Task) ->
     {container, _}
   ] = Task,
 
-  "id=`" ++ ID ++
-    "`created_at=`" ++ CreatedAt ++
-    "`started_at=`" ++ StartedAt ++
-    "`finished_at=`" ++ FinishedAt ++
-    "`stdout=`" ++ StdOut ++
-    "`stderr=`" ++ StdErr ++
-    "`result=`" ++ Result.
+  "id=\"" ++ ID ++
+    "\"created_at=\"" ++ CreatedAt ++
+    "\"started_at=\"" ++ StartedAt ++
+    "\"finished_at=\"" ++ FinishedAt ++
+    "\"stdout=\"" ++ StdOut ++
+    "\"stderr=\"" ++ StdErr ++
+    "\"result=\"" ++ Result ++
+    "\"".
 
 
 to_head(Type, Value) ->

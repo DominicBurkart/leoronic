@@ -22,9 +22,16 @@ head_pid/0, should_be_head/1, head/0
 -import(utils, [select/2, sub/2]).
 -export([
   perform_task/1,
-  send_system_info/1
+  send_system_info/1,
+  spawn_kid/3
 ]).
 -export([start/0, stop/0, init/0]).
+
+-dialyzer({nowarn_function, perform_task/1}).
+
+spawn_kid(Mod, Fun, Args) ->
+  head_pid() ! {add_kid, Fun},
+  register(Fun, spawn(Mod, Fun, Args)).
 
 
 start() ->
@@ -38,14 +45,13 @@ stop() ->
 init() ->
   register(leoronic, self()),
   process_flag(trap_exit, true),
-  spawn(node(), leoronic, alert_new_node, []),
+  spawn_kid(leoronic, alert_new_node, []),
   ets:new(kids, [set, named_table]),
-  case check_should_be_head(node()) of
-    true ->
-      spawn(node(), head, head, []);
-    false ->
-      register(loop_head_check, spawn(node(), leoronic, loop_check_should_be_head, [])),
-      ets:insert(kids, {loop_head_check})
+  case check_should_be_head() of
+    is_head ->
+      spawn_kid(head, head, []);
+    not_head ->
+      spawn_kid(leoronic, loop_check_should_be_head, [])
   end,
   loop().
 
@@ -53,8 +59,13 @@ init() ->
 loop() ->
   receive
     {new_node_initialized} ->
-      spawn(node(), leoronic, check_should_be_head, []),
+      spawn_kid(leoronic, check_should_be_head, []),
       loop();
+    {add_kid, Kid} ->
+      ets:insert(kids, {Kid});
+    {prune_kids} -> % todo call this when idling
+      ets:delete(kids, [{Kid} || {Kid} <- ets:tab2list(kids), whereis(Kid) =:= undefined]);
+    % todo have a function that hibernates leoronic when it's idle / has no tasks.
     stop ->
       [Kid ! stop || {Kid} <- ets:tab2list(kids)],
       exit(normal)
@@ -89,7 +100,6 @@ loop_check_should_be_head() ->
     end
   end.
 
-
 alert_new_node() ->
   [{leoronic, N} ! new_node_initialized || N <- nodes()].
 
@@ -103,7 +113,7 @@ impute_task_values_helper(Old, [[UpdatingKey, UpdatingValue] | New]) ->
 
 
 impute_task_values(Task, Values) ->
-  impute_task_values_helper(Task, [Values | {has_run, true}]).
+  impute_task_values_helper(Task, [{has_run, true} | Values]).
 
 
 perform_task(Task) ->

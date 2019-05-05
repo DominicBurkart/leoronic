@@ -6,9 +6,13 @@ chmod +x rebar3
 
 git clone https://github.com/inaka/elvis
 (
-cd elvis || exit 1
-../rebar3 compile
-../rebar3 escriptize
+    cd elvis || exit 1
+    ../rebar3 compile
+    ../rebar3 escriptize
 )
 
 mv elvis/_build/default/bin/elvis ./.elvis
+
+
+# set up dialyzer
+dialyzer --build_plt --apps erts kernel stdlib mnesia

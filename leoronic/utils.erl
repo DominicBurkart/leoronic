@@ -10,16 +10,25 @@
 -author("dominicburkart").
 
 %% API
--export([select/2, sub/2, indexed/1, in_match_specification/2, not_in_match_specification/2]).
+-export([
+  select/2,
+  sub/2,
+  indexed/1,
+  in_match_specification/2,
+  not_in_match_specification/2,
+  git_root_directory/0
+]).
 
+git_root_directory() ->
+  string:trim(os:cmd("git rev-parse --show-toplevel")).
 
-select(Key, L) ->  [Value || {Key1, Value} <- L, Key == Key1].
+select(Key, L) ->
+  element(2, lists:keyfind(Key, 1, L)).
 
 sub(KeyList, L) -> [{K1, V} || {K1, V} <- L, lists:member(K1, KeyList)]. % retains order in L
 
 indexed(L) ->
-  Length = length(L),
-  lists:zip(lists:seq(1, Length), L).
+  lists:zip(lists:seq(1, length(L)), L).
 
 in_match_specification_helper(V, [H | T], Partial) ->
   case T of
@@ -29,7 +38,7 @@ in_match_specification_helper(V, [H | T], Partial) ->
       in_match_specification_helper(V, T, {'orelse',  Partial, {'=:=', V, H}})
   end.
 
-in_match_specification(V, []) ->
+in_match_specification(_, []) ->
   {false};
 
 in_match_specification(V, [H]) ->

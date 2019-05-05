@@ -9,6 +9,7 @@
 -author("dominicburkart").
 
 %% API
+-include_lib("kernel/include/inet.hrl").
 -export([link_to_leoronic/0]).
 
 local_ips() ->
@@ -23,14 +24,17 @@ local_ips() ->
     size(Addr) == 4
   ].
 
-connect([IP | T]) ->
-  {_, Hostent} = inet:gethostbyaddr(IP),
-  [Hostname] = element(2, Hostent),
-  net_kernel:connect_node(list_to_atom("leoronic@" ++ Hostname)),
-  %^ note: we make a new atom for each non-local address on the network.
-  connect(T);
+connect([]) -> ok;
 
-connect([]) -> ok.
+connect([IP | T]) ->
+  case inet:gethostbyaddr(IP) of
+    {ok , Hostent} when is_record(Hostent, hostent) ->
+      HostName = Hostent#hostent.h_name,
+      net_kernel:connect_node(list_to_atom("leoronic@" ++ HostName)),
+      connect(T);
+    {error, _} ->
+      connect(T)
+  end.
 
 link_to_leoronic() ->
   {ok, Host} = inet:gethostname(),
