@@ -6,74 +6,145 @@
 %%% Created : 25. avr. 2019 19:22
 %%%-------------------------------------------------------------------
 -module(leoronic).
+-behavior(gen_server).
 -author("dominicburkart").
 
 %% API
--import(
-link_to_leoronic, [
+-import(link_to_leoronic, [
 link_to_leoronic/0
 ]).
 -import(run_container, [
 run_container/2
 ]).
--import(head, [
-head_pid/0, should_be_head/1, head/0
-]).
 -import(utils, [select/2, sub/2]).
 -export([
+  start/0,
+  start_link/0,
+  init/1,
   perform_task/1,
-  send_system_info/1,
-  spawn_kid/3
-]).
--export([start/0, stop/0, init/0]).
+  add_child_process/3,
+  housekeeping/2,
+  perform_task/2,
+  stop/1,
+  alert_new_node/0
+  ]).
+-record(state, { kids }).
+-type state() :: #rec{}.
 
 -dialyzer({nowarn_function, perform_task/1}).
 
-spawn_kid(Mod, Fun, Args) ->
-  head_pid() ! {add_kid, Fun},
-  register(Fun, spawn(Mod, Fun, Args)).
-
+%%% API
 
 start() ->
-  spawn(leoronic, init, []).
+  gen_server:start(?MODULE, [make_state()], []).
+
+start_link() ->
+  gen_server:start_link(?MODULE, [make_state()], []).
+
+add_child_process(Mod, Fun, Args) ->
+  gen_server:call(self(), {add_child, {Mod, Fun, Args}}).
+
+housekeeping(Pid, Cmd) ->
+  gen_server:call(Pid, Cmd).
+
+perform_task(Pid, Task) ->
+  gen_server:cast(Pid, {perform_task, Task}).
+
+stop(Pid) ->
+  gen_server:call(Pid, stop).
+
+%%% Server functions
+
+make_state() ->
+  ets:new(kids, [set, public, named_table]).
 
 
-stop() ->
-  leoronic ! stop.
-
-
-init() ->
-  register(leoronic, self()),
-  process_flag(trap_exit, true),
+init(KidTable) -> % todo where to declare process_flag(trap_exit, true),
   spawn_kid(leoronic, alert_new_node, []),
-  ets:new(kids, [set, named_table]),
   case check_should_be_head() of
     is_head ->
       spawn_kid(head, head, []);
     not_head ->
       spawn_kid(leoronic, loop_check_should_be_head, [])
   end,
-  loop().
+  {ok, #state {kids = KidTable}}.
+
+handle_cast({perform_task, Task}, _State) ->
+  CompletedTaskInfo = perform_task(Task),
+  head:head_pid() ! CompletedTaskInfo,
+  % todo is there a better way to do this? sending head might not be receiving head
+  {noreply}.
+
+handle_call(send_system_info, _From, State) ->
+  {reply, send_system_info(), State};
+
+handle_call(new_node_initialized, _From, _State) ->
+  spawn_kid(leoronic, check_should_be_head, []),
+  {no_reply};
+
+handle_call({add_child, {Mod, Fun, Args}}, _From, _State) ->
+  spawn_kid(Mod, Fun, Args),
+  {no_reply};
+
+handle_call(prune_kids, _From, _State) ->
+  ets:delete(kids, [{Kid} || {Kid} <- ets:tab2list(kids), whereis(Kid) =:= undefined]),
+  {no_reply};
+
+handle_call(stop, _From, _State) ->
+  [Kid ! stop || {Kid} <- ets:tab2list(kids)],
+  exit(normal),
+  {no_reply}.
+
+code_change(_, State, _) ->
+  {ok, State}.
+
+%%% Internals
 
 
-loop() ->
-  receive
-    {new_node_initialized} ->
-      spawn_kid(leoronic, check_should_be_head, []),
-      loop();
-    {add_kid, Kid} ->
-      ets:insert(kids, {Kid});
-    {prune_kids} -> % todo call this when idling
-      ets:delete(kids, [{Kid} || {Kid} <- ets:tab2list(kids), whereis(Kid) =:= undefined]);
-    % todo have a function that hibernates leoronic when it's idle / has no tasks.
-    stop ->
-      [Kid ! stop || {Kid} <- ets:tab2list(kids)],
-      exit(normal)
-  end.
+perform_task(Task) ->
+  impute_task_values(
+    Task,
+    run_container(
+      select(container, Task),
+      sub([memory, storage, cpus], Task)
+    )
+  ).
+
+
+send_system_info() -> % yields memory in MB
+  application:start(sasl),
+  application:start(os_mon),
+  [{_, TotalMemory}, {_, CurrentMemory}, {_, _}] = memsup:get_system_memory_data(),
+  application:stop(os_mon),
+  application:stop(sasl),
+
+  Cores = erlang:system_info(logical_processors_available),
+
+  {
+    system_info,
+    {[
+      {node, node()},
+      {total_memory, TotalMemory / 1000000},
+      {free_memory, CurrentMemory / 1000000},
+      {cores,
+        case Cores of
+          unknown -> % MacOS leaves this unknown
+            erlang:system_info(schedulers_online);
+          _ ->
+            Cores
+        end
+      }
+    ]}
+  }.
+
+
+spawn_kid(Mod, Fun, Args) ->
+  register(Fun, spawn(Mod, Fun, Args)),
+  ets:insert(kids, {Fun}).
 
 
 check_should_be_head() ->
-  case should_be_head(node()) of
+  case head:should_be_head(node()) of
     true ->
       case whereis(head) of
         undefined ->
@@ -114,39 +185,3 @@ impute_task_values_helper(Old, [[UpdatingKey, UpdatingValue] | New]) ->
 
 impute_task_values(Task, Values) ->
   impute_task_values_helper(Task, [{has_run, true} | Values]).
-
-
-perform_task(Task) ->
-  head_pid() !
-    impute_task_values(
-      Task,
-      run_container(
-        select(container, Task),
-        sub([memory, storage, cpus], Task)
-      )
-    ).
-
-send_system_info(HeadPid) -> % yields memory in MB
-  application:start(sasl),
-  application:start(os_mon),
-  [{_, TotalMemory}, {_, CurrentMemory}, {_, _}] = memsup:get_system_memory_data(),
-  application:stop(os_mon),
-  application:stop(sasl),
-
-  Cores = erlang:system_info(logical_processors_available),
-  CoreReport =
-    case Cores of
-      unknown -> % MacOS leaves this unknown
-        {cores, erlang:system_info(schedulers_online)};
-      _ ->
-        {cores, Cores}
-    end,
-  HeadPid ! {
-    system_info,
-    {[
-      {node, node()},
-      {total_memory, TotalMemory / 1000000},
-      {free_memory, CurrentMemory / 1000000},
-      CoreReport
-    ]}
-  }.

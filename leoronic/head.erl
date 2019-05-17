@@ -10,7 +10,7 @@
 
 %% API
 -import(utils, [select/2, indexed/1, not_in_match_specification/2]).
--export([heads/0, should_be_head/1, head/0, head_pid/0]).
+-export([heads/0, should_be_head/1, head/0, head_pid/0, job_checker_scheduler/2]).
 
 
 heads() -> [{head, Node} || Node <- nodes(), should_be_head(Node)].
@@ -30,12 +30,12 @@ number_of_heads() ->
 
 
 sorted_nodes() ->
-  lists:sort(nodes() ++ [node()]).
+  lists:sort([node()] ++ nodes()).
 
 
 should_be_head(Node) when is_atom(Node) ->
-  HeadNodes = lists:sublist(sorted_nodes(), number_of_heads()),
-  lists:member(Node, HeadNodes).
+  whereis(leoronic_port) /= undefined orelse
+  lists:member(Node, lists:sublist(sorted_nodes(), number_of_heads())).
 
 
 worker_head_tuples() ->
@@ -65,8 +65,7 @@ head_pid() ->
 
 % todo refactor so that the dockerfile, stdout, stderr, and result all have their own tables.
 head() ->
-  register(head, self()),
-  register(scheduler, spawn(head, job_checker_scheduler, [os:system_time(), os:system_time()])),
+  leoronic:add_child_process(head, job_checker_scheduler, [os:system_time(), os:system_time()]),
   ets:new(tasks, [set, named_table]), % ets tables are released when this process terminates.
   ets:new(params, [set, named_table]),
   ets:new(running_tasks, [set, named_table]),
@@ -82,6 +81,7 @@ ask_for_params(ReturnPid) ->
     true ->
       {head, FirstOtherNode} ! {ReturnPid, get_params, undefined}
   end.
+
 
 ask_for_worker_info([Worker | Workers], ReturnPid) ->
   spawn(Worker, leoronic, send_system_info, [ReturnPid]),
@@ -107,6 +107,7 @@ match_available_to_requested_helper(Available, Requested, FoundMatches) ->
           WithNewMatches
       end
   end.
+
 
 match_available_to_requested(Available, Requested, FoundMatches) ->
 % todo this should be a binary search.
@@ -241,7 +242,8 @@ loop() ->
         {dockerless, Dockerless},
         {container, Container}
       ] = PartialTask,
-      RespondTo = case Await of
+      RespondTo =
+        case Await of
                     false -> undefined;
                     true -> PortPid
                   end,
@@ -347,8 +349,7 @@ loop() ->
       loop();
 
     stop ->
-      register(loop_head_check,
-        spawn(node(), leoronic, loop_check_should_be_head, [])),
+      leoronic:add_child_process(leoronic, loop_check_should_be_head, []),
       ok;
 
     {'EXIT', Pipe, Reason} ->
