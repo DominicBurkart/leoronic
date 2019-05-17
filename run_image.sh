@@ -7,5 +7,5 @@ then
     echo "Running container..."
 fi
 
-# the child needs access to the docker socket.
-docker run -v /var/run/docker.sock:/var/run/docker.sock leoronic
+# pass the docker socket into the container so that any children container are actually siblings.
+docker run -v /var/run/docker.sock:/var/run/docker.sock -v "$(pwd)"/.leoronic_cookie:/.leoronic_cookie leoronic
