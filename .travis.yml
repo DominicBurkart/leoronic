@@ -1,6 +1,9 @@
 language: erlang
-notifications:
-  email: dominicburkart@nyu.edu
-install: true
+otp_release:
+  - 21.3
 script:
-  - bash test_leoronic
+  - bash dev_install.sh
+  - bash .run_dialyzer
+  - ./.elvis rock
+  - shellcheck *.sh
+

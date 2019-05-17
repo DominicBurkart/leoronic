@@ -1,0 +1,7 @@
+ls leoronic/*.erl | xargs erlc +debug_info
+dialyzer --check_plt
+if [ "$(dialyzer -Wno_unused . | tail -n 1)" = "done (warnings were emitted)" ]
+then
+    dialyzer -Wno_unused .
+    exit 1
+fi
