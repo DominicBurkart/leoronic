@@ -28,18 +28,19 @@ run_container/2
   stop/1,
   alert_new_node/0
   ]).
--record(state, { kids }).
--type state() :: #rec{}.
+-record(state, {kids=none}).
+-type state() :: #state{}.
+
 
 -dialyzer({nowarn_function, perform_task/1}).
 
 %%% API
 
 start() ->
-  gen_server:start(?MODULE, [make_state()], []).
+  gen_server:start(?MODULE, make_state(), []).
 
 start_link() ->
-  gen_server:start_link(?MODULE, [make_state()], []).
+  gen_server:start_link(?MODULE, make_state(), []).
 
 add_child_process(Mod, Fun, Args) ->
   gen_server:call(self(), {add_child, {Mod, Fun, Args}}).
@@ -56,10 +57,9 @@ stop(Pid) ->
 %%% Server functions
 
 make_state() ->
-  ets:new(kids, [set, public, named_table]).
+  #state { kids=ets:new(kids, [set, public, named_table]) }.
 
-
-init(KidTable) -> % todo where to declare process_flag(trap_exit, true),
+init(State) -> % todo where to declare process_flag(trap_exit, true),
   spawn_kid(leoronic, alert_new_node, []),
   case check_should_be_head() of
     is_head ->
@@ -67,7 +67,7 @@ init(KidTable) -> % todo where to declare process_flag(trap_exit, true),
     not_head ->
       spawn_kid(leoronic, loop_check_should_be_head, [])
   end,
-  {ok, #state {kids = KidTable}}.
+  {ok, State}.
 
 handle_cast({perform_task, Task}, _State) ->
   CompletedTaskInfo = perform_task(Task),
