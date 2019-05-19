@@ -21,7 +21,7 @@ class Task:
     stdout: str
     stderr: str
     result: str
-    await: bool
+    wait: bool
     cpus: int
     memory: int
     storage: int
@@ -32,7 +32,7 @@ class Task:
 @dataclass
 class InputTask:
     container: str
-    await: bool = False
+    wait: bool = False
     cpus: int = 1
     memory: int = 500  # in megabytes
     storage: int = 500  # in megabytes
