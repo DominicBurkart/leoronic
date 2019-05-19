@@ -1,9 +1,18 @@
-language: erlang
-otp_release:
-  - 21.3
-script:
-  - bash dev_install.sh
-  - bash .run_dialyzer
-  - ./.elvis rock
-  - shellcheck *.sh
+matrix:
+  include:
+    - language: erlang
+      otp_release: 21.3
+      install:
+        - bash dev_install.sh
+      script:
+        - bash .run_dialyzer
+        - ./.elvis rock
+        - shellcheck *.sh
 
+    - language: python
+      dist: xenial
+      python: "3.7"
+      install:
+        - pip install mypy
+      script:
+        - mypy wrappers/python3/

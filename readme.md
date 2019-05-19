@@ -1,8 +1,10 @@
 # Leoronic
 [![build status](https://travis-ci.org/DominicBurkart/leoronic.svg?branch=master)](https://travis-ci.org/DominicBurkart/leoronic)
 [![static analysis: dialyzer](https://img.shields.io/badge/static%20analysis-dialyzer-42f4c5.svg)](https://github.com/erlang/otp/tree/master/lib/dialyzer)
+[![static analysis: mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 [![code style: elvis](https://img.shields.io/badge/code%20style-elvis-blue.svg)](https://github.com/inaka/elvis)
 [![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg?style=flat-square)](https://github.com/prettier/prettier)
+<a href="https://github.com/python/black"><img alt="code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
 ![open issues](https://img.shields.io/github/issues/dominicburkart/leoronic.svg)
 ![latest release](https://img.shields.io/github/release/dominicburkart/leoronic.svg)
 ![last commit](https://img.shields.io/github/last-commit/dominicburkart/leoronic.svg)
