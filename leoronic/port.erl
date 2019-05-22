@@ -153,6 +153,27 @@ to_head(Type, Value) ->
     Response -> Response
   end.
 
+bs() ->
+  list_to_binary(" ").
+
+as_bin(Response) ->
+  case Response of
+    {new_task_id, ClientId, TaskId} ->
+      atom_to_binary(new_task_id)
+      ++ bs()
+      ++ list_to_binary(ClientId)
+      ++ bs()
+      ++ list_to_binary(TaskId);
+    {task_complete, Task} ->
+      atom_to_binary(task_complete)
+      ++ bs()
+      ++ list_to_binary(task_to_str(Task));
+    {task_not_complete, TaskId} ->
+      atom_to_binary(task_not_complete)
+      ++ bs()
+      ++ list_to_binary(TaskId)
+  end.
+
 
 head_resp_to_pipe(Pipe, Type, Value) ->
-  spawn(fun() -> Pipe ! {self(), to_head(Type, Value)} end).
+  spawn(fun() -> Pipe ! as_bin(to_head(Type, Value)) end).
