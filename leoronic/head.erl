@@ -65,7 +65,11 @@ head_pid() ->
 
 % todo refactor so that the dockerfile, stdout, stderr, and result all have their own tables.
 head() ->
-  leoronic:add_child_process(head, job_checker_scheduler, [os:system_time(), os:system_time()]),
+  leoronic:add_child_process(
+    head,
+    job_checker_scheduler,
+    [os:system_time(second), os:system_time(second)]
+  ),
   ets:new(tasks, [set, named_table]), % ets tables are released when this process terminates.
   ets:new(params, [set, named_table]),
   ets:new(running_tasks, [set, named_table]),
@@ -213,7 +217,7 @@ job_checker_scheduler(LastRan, LastIdle) ->
   receive
     {idle} -> ok; % todo
     {ran} ->
-      job_checker_scheduler(os:system_time(), LastIdle);
+      job_checker_scheduler(os:system_time(second), LastIdle);
     {ReturnPid, get_times} ->
       ReturnPid ! {times, LastRan, LastIdle},
       job_checker_scheduler(LastRan, LastIdle)
@@ -225,7 +229,7 @@ job_checker_scheduler(LastRan, LastIdle) ->
 
 make_id() ->
   list_to_integer(
-    integer_to_list(os:system_time()) ++
+    integer_to_list(os:system_time(second)) ++
     [C || C <- pid_to_list(self()), C >= $0 andalso C =< $9]
   ).
 
@@ -234,6 +238,7 @@ loop() ->
     {ReturnPid, add_task, PartialTask} ->
       Id = make_id(),
       [
+        {client_id, ClientId},
         {port_pid, PortPid},
         {await, Await},
         {cpus, CPUS},
@@ -250,7 +255,7 @@ loop() ->
       Task = [
         {has_run, false},
         {respond_to, RespondTo},
-        {created_at, os:system_time()},
+        {created_at, os:system_time(second)},
         {started_at, undefined},
         {finished_at, undefined},
         {dockerless, Dockerless},
@@ -263,7 +268,7 @@ loop() ->
         {container, Container}
       ],
       ets:insert(tasks, {Id, Task}),
-      ReturnPid ! {new_task_id, Id},
+      ReturnPid ! {new_task_id, ClientId, Id},
       loop();
 
     {TaskPid, running_task, TaskId} ->
@@ -288,7 +293,7 @@ loop() ->
           ReturnPid ! {task_complete, Task},
           ets:delete(tasks, TaskId);
         false ->
-          ReturnPid ! {task_not_complete}
+          ReturnPid ! {task_not_complete, TaskId}
       end,
       loop();
 

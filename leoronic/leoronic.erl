@@ -102,11 +102,13 @@ code_change(_, State, _) ->
 
 
 perform_task(Task) ->
+  [TaskId] = sub([id], Task),
   impute_task_values(
     Task,
     run_container(
       select(container, Task),
-      sub([memory, storage, cpus], Task)
+      sub([memory, storage, cpus], Task),
+      TaskId
     )
   ).
 

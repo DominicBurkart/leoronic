@@ -9,7 +9,7 @@
 -author("dominic burkart").
 
 %% API
--export([run_container/2]).
+-export([run_container/3]).
 -dialyzer({nowarn_function, [start_pipe/1, run_container/2]}).
 % ^ todo localize this to the open_port calls
 
@@ -64,10 +64,12 @@ get_completed_values(ListenerPids, AdditionalValues) ->
   lists:keysort(1, Unsorted).
 
 
-run_container(Container, Tags) ->
+run_container(Container, Tags, TaskId) ->
+  PipeNames = [ N ++ TaskId || N <- ["result", "stdout", "stderr"]],
+
   % open pipes
-  ListenerPids = [start_pipe(V) || V <- ["result", "stdout", "stderr"]],
-  StartingTime = os:system_time(),
+  ListenerPids = [start_pipe(V) || V <- PipeNames],
+  StartingTime = os:system_time(second),
 
   % make commands to build image from container & run it
   ImageName =
@@ -88,7 +90,11 @@ run_container(Container, Tags) ->
     "docker run " ++
     parse_tags(Tags) ++
     " " ++
-    ImageName,
+    ImageName ++
+    " 1> stdout" ++
+    TaskId ++
+    " 2> stderr" ++
+    TaskId,
   DockerCleanUpCommand =
     "docker image rm -f " ++ ImageName,
   % todo remove the container here, not just the image
@@ -99,4 +105,5 @@ run_container(Container, Tags) ->
   os:cmd(CombinedCommand),
 
   % collect results & return with runtime information
-  get_completed_values(ListenerPids, [{started_at, StartingTime}, {ended_at, os:system_time()}]).
+  get_completed_values(ListenerPids,
+    [{started_at, StartingTime}, {ended_at, os:system_time(second)}]).
