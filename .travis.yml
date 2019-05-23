@@ -16,7 +16,7 @@ matrix:
       python: "3.7"
       cache: pip
       install:
-        - pip install black mypy
+        - pip install black mypy dill
       script:
         - black wrappers/python3
         - mypy wrappers/python3
@@ -27,7 +27,7 @@ matrix:
       python: "3.7"
       cache: pip
       install:
-        - pip install pytest
+        - pip install pytest dill
       script:
         - pytest wrappers/python3/*.py
 #    - name: "erlang x python integration tests"
