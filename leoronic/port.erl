@@ -159,17 +159,17 @@ bs() ->
 as_bin(Response) ->
   case Response of
     {new_task_id, ClientId, TaskId} ->
-      atom_to_binary(new_task_id)
+      atom_to_binary(new_task_id, utf8)
       ++ bs()
       ++ list_to_binary(ClientId)
       ++ bs()
       ++ list_to_binary(TaskId);
     {task_complete, Task} ->
-      atom_to_binary(task_complete)
+      atom_to_binary(task_complete, utf8)
       ++ bs()
       ++ list_to_binary(task_to_str(Task));
     {task_not_complete, TaskId} ->
-      atom_to_binary(task_not_complete)
+      atom_to_binary(task_not_complete, utf8)
       ++ bs()
       ++ list_to_binary(TaskId)
   end.

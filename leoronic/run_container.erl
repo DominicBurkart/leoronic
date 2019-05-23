@@ -10,7 +10,7 @@
 
 %% API
 -export([run_container/3]).
--dialyzer({nowarn_function, [start_pipe/1, run_container/2]}).
+-dialyzer({nowarn_function, [start_pipe/1, run_container/3]}).
 % ^ todo localize this to the open_port calls
 
 
@@ -50,7 +50,7 @@ collect_listener(Pid) ->
   Pid ! {self(), done},
   receive
     {PipeName, CollectedStr} ->
-      case PipeName of
+      case string:sub_string(PipeName, 1, 6) of
         "result" -> {result, CollectedStr};
         "stdout" -> {stdout, CollectedStr};
         "stderr" -> {stderr, CollectedStr}
@@ -59,16 +59,14 @@ collect_listener(Pid) ->
 
 
 get_completed_values(ListenerPids, AdditionalValues) ->
-  Unsorted =
-    [collect_listener(Pid) || Pid <- ListenerPids] ++ AdditionalValues,
-  lists:keysort(1, Unsorted).
+  lists:keysort(1,
+    AdditionalValues ++ [collect_listener(Pid) || Pid <- ListenerPids]
+  ).
 
 
-run_container(Container, Tags, TaskId) ->
-  PipeNames = [ N ++ TaskId || N <- ["result", "stdout", "stderr"]],
-
+run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   % open pipes
-  ListenerPids = [start_pipe(V) || V <- PipeNames],
+  ListenerPids = [start_pipe(V ++ TaskIdStr) || V <- ["result", "stdout", "stderr"]],
   StartingTime = os:system_time(second),
 
   % make commands to build image from container & run it
@@ -92,9 +90,9 @@ run_container(Container, Tags, TaskId) ->
     " " ++
     ImageName ++
     " 1> stdout" ++
-    TaskId ++
+    TaskIdStr ++
     " 2> stderr" ++
-    TaskId,
+    TaskIdStr,
   DockerCleanUpCommand =
     "docker image rm -f " ++ ImageName,
   % todo remove the container here, not just the image

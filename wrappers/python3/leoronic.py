@@ -394,14 +394,14 @@ def test_docker_wrapper_template_has_one_set_of_brackets():
 
 
 def _test_parse_task_response():
-    test = """\
-    id="1"
-    created_at="1558540420"
-    started_at="1558540425"
-    finished_at="1558540430"
-    stdout="stdoutbase64string"
-    stderr="stderrbase64string"
-    result="resultbase64string"
+    test = """
+        id="1"
+        created_at="1558540420"
+        started_at="1558540425"
+        finished_at="1558540430"
+        stdout="stdoutbase64string"
+        stderr="stderrbase64string"
+        result="resultbase64string"
     """.replace(
         "\n", ""
     ).replace(

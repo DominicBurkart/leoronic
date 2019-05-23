@@ -1,4 +1,4 @@
-from wrappers.python3.leoronic import *
+from leoronic import *
 
 
 def test_apply():
