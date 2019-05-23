@@ -80,7 +80,7 @@ class InputTask(LeoronicBaseClass):
                 self.memory,
                 self.storage,
                 self.dockerless,
-                base64.b64encode(self.container),
+                base64.b64encode(self.container.encode()).decode(),
             ]
         )
 
@@ -120,7 +120,7 @@ unclaimed_id_maps: Dict[ClientId, TaskId] = dict()
 ### dockerfile container template
 
 (major, minor, _1, _2, _3) = sys.version_info
-command_template = """
+command_template = """\
 import dill
 import base64
 import pipes
@@ -128,17 +128,16 @@ import pipes
 t = pipes.Template()
 t.append("tr a-z A-Z", "--")
 result_pipe = t.open("result", "w")
-f = dill.loads(base64.b64decode("{}"))
+f = dill.loads(base64.b64decode("{}".encode()))
 try:
-    result_pipe.write("r" + str(base64.b64encode(dill.dumps(f()))))
+    result_pipe.write("r" + base64.b64encode(dill.dumps(f()).encode()).decode())
 except Exception as e:
-    result_pipe.write("e" + str(base64.b64encode(dill.dumps(e))))
+    result_pipe.write("e" + base64.b64encode(dill.dumps(e).encode()).decode())
 result_pipe.close()
 """.replace(
     "\n", "; "
 )
-
-container_template = f"""
+container_template = f"""\
 FROM python:{major}.{minor}
 RUN  pip install dill
 CMD  python -c "{command_template}"
@@ -176,9 +175,9 @@ def parse_task_response(response: str) -> CompletedTask:
         created_at=_str_to_date(d["created_at"]),
         started_at=_str_to_date(d["started_at"]),
         finished_at=_str_to_date(d["finished_at"]),
-        result=str(base64.b64decode(d["result"])),
-        stdout=str(base64.b64decode(d["stdout"])),
-        stderr=str(base64.b64decode(d["stdout"])),
+        result=base64.b64decode(d["result"].encode()).decode(),
+        stdout=base64.b64decode(d["stdout"].encode()).decode(),
+        stderr=base64.b64decode(d["stdout"].encode()).decode(),
     )
 
 
@@ -253,7 +252,7 @@ def await_tasks(ids: Set[TaskId]) -> Iterator[CompletedTask]:
 
 
 def make_container(function: Callable[[], Any]) -> str:
-    return container_template.format(base64.b64encode(dill.dumps(function)))
+    return container_template.format(base64.b64encode(dill.dumps(function)).decode())
 
 
 def _variable_intersection(o1: object, o2: object) -> Set:
@@ -286,7 +285,7 @@ def check_reqs(reqs: Reqs, bad_fields: Iterable[str]) -> None:
 
 
 def handle_completed(task: CompletedTask):
-    result = dill.loads(base64.b64decode(task.result[1:]))
+    result = dill.loads(base64.b64decode(task.result[1:].encode()))
     if task.result[0] == "e":  # error response
         raise result
     return result
@@ -354,7 +353,9 @@ def imap_unordered(
         yield handle_completed(completed)
 
 
-def starmap(fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs]) -> List[Output]:
+def starmap(
+    fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
+) -> List[Output]:
     return map(fun, iterable, reqs)
 
 
@@ -375,7 +376,7 @@ def test_fields():
         def m1(self):
             return self.v1 + str(self.v2)
 
-    d = DummyClass("hi", 10)
+    d = DummyClass(v1="hi", v2=10)
     assert list(_fields(d)) == ["v1", "v2"]
     assert list(_fields(DummyClass)) == ["v1", "v2"]
 
@@ -463,7 +464,7 @@ def _test_parse_task_response():
         created_at=datetime.datetime(2019, 5, 22, 15, 53, 40),  # utc
         started_at=datetime.datetime(2019, 5, 22, 15, 53, 45),
         finished_at=datetime.datetime(2019, 5, 22, 15, 53, 50),
-        stdout=base64.b64decode("stdoutbase64string"),
-        stderr=base64.b64decode("stderrbase64string"),
-        result=base64.b64decode("resultbase64string"),
+        stdout=base64.b64decode("stdoutbase64string".encode()).decode(),
+        stderr=base64.b64decode("stderrbase64string".encode()).decode(),
+        result=base64.b64decode("resultbase64string".encode()).decode(),
     )
