@@ -27,9 +27,9 @@ matrix:
       python: "3.7"
       cache: pip
       install:
-        - pip install pytest dill
+        - pip install pytest pytest-cov dill
       script:
-        - pytest wrappers/python3/*.py
+        - pytest --cov=./ wrappers/python3/*.py
 #    - name: "erlang x python integration tests"
 #      language: erlang
 #      otp_release: 21.3

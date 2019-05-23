@@ -1,5 +1,7 @@
 # Leoronic
+
 [![build status](https://travis-ci.org/DominicBurkart/leoronic.svg?branch=master)](https://travis-ci.org/DominicBurkart/leoronic)
+[![code coverage: python](https://codecov.io/gh/DominicBurkart/leoronic/branch/master/graph/badge.svg)](https://codecov.io/gh/DominicBurkart/leoronic)
 [![static analysis: dialyzer](https://img.shields.io/badge/static%20analysis-dialyzer-42f4c5.svg)](https://github.com/erlang/otp/tree/master/lib/dialyzer)
 [![static analysis: mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 [![code style: elvis](https://img.shields.io/badge/code%20style-elvis-blue.svg)](https://github.com/inaka/elvis)
