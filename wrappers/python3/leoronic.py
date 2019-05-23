@@ -370,13 +370,13 @@ def starmap_async(
 
 def test_fields():
     class DummyClass:
-        v1: str
-        v2: int
+        v1: str = "hi"
+        v2: int = 10
 
         def m1(self):
             return self.v1 + str(self.v2)
 
-    d = DummyClass(v1="hi", v2=10)
+    d = DummyClass()
     assert list(_fields(d)) == ["v1", "v2"]
     assert list(_fields(DummyClass)) == ["v1", "v2"]
 
