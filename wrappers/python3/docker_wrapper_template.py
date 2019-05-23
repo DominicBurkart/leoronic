@@ -1,4 +1,4 @@
-import dill
+import dill  # type: ignore
 import base64
 import pipes
 

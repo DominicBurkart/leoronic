@@ -19,10 +19,9 @@ from typing import (
     Optional,
     Union,
     Iterator,
-    cast,
 )
 
-import dill
+import dill  # type: ignore
 
 ### types
 
