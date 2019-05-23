@@ -120,7 +120,23 @@ unclaimed_id_maps: Dict[ClientId, TaskId] = dict()
 ### dockerfile container template
 
 (major, minor, _1, _2, _3) = sys.version_info
-command_template = open("docker_wrapper_template.py").read().replace("\n", "; ")
+command_template = """
+import dill
+import base64
+import pipes
+
+t = pipes.Template()
+t.append("tr a-z A-Z", "--")
+result_pipe = t.open("result", "w")
+f = dill.loads(base64.b64decode("{}"))
+try:
+    result_pipe.write("r" + str(base64.b64encode(dill.dumps(f()))))
+except Exception as e:
+    result_pipe.write("e" + str(base64.b64encode(dill.dumps(e))))
+result_pipe.close()
+""".replace(
+    "\n", "; "
+)
 
 container_template = f"""
 FROM python:{major}.{minor}
@@ -389,7 +405,7 @@ def test_apply_async_print():
 def test_blocking_functions():
     import multiprocessing
 
-    def f(x: int, y: int):
+    def f(x: int, y: int) -> int:
         return x * y
 
     inputs = [(x, y) for x in range(5) for y in range(5)]
@@ -424,7 +440,7 @@ def test_async_functions():
 
 
 def test_docker_wrapper_template_has_one_set_of_brackets():
-    assert open("docker_wrapper_template.py").read().count("{}") == 1
+    assert command_template.count("{}") == 1
 
 
 def _test_parse_task_response():
