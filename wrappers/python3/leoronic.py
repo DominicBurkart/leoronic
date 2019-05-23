@@ -335,7 +335,7 @@ def imap_unordered(
     fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
 ) -> Iterable[Output]:
     asyncs = map_async(fun, iterable, reqs)
-    for completed in await_tasks(set(async.id for async in asyncs)):
+    for completed in await_tasks(set(a.id for a in asyncs)):
         yield handle_completed(completed)
 
 
