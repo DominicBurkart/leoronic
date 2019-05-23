@@ -1,3 +1,4 @@
+import builtins
 import base64
 import datetime
 import functools
@@ -64,7 +65,7 @@ class AsyncTask(LeoronicBaseClass):
 @dataclass
 class InputTask(LeoronicBaseClass):
     container: str
-    _client_id: int = 0  # is defined just before the object is piped out
+    _client_id: int = 0  # defined just before the object is piped out
     wait: bool = False
     cpus: int = 1
     memory: int = 500  # in megabytes
@@ -73,15 +74,18 @@ class InputTask(LeoronicBaseClass):
 
     def __str__(self):
         return ", ".join(
-            [
-                self._client_id,
-                self.wait,
-                self.cpus,
-                self.memory,
-                self.storage,
-                self.dockerless,
-                base64.b64encode(self.container.encode()).decode(),
-            ]
+            builtins.map(
+                lambda v: str(v),
+                [
+                    self._client_id,
+                    self.wait,
+                    self.cpus,
+                    self.memory,
+                    self.storage,
+                    self.dockerless,
+                    base64.b64encode(self.container.encode()).decode(),
+                ],
+            )
         )
 
     def update(self, reqs: Reqs) -> None:
