@@ -16,11 +16,17 @@
   indexed/1,
   in_match_specification/2,
   not_in_match_specification/2,
-  git_root_directory/0
+  root_directory/0
 ]).
 
-git_root_directory() ->
-  string:trim(os:cmd("git rev-parse --show-toplevel")).
+root_directory() ->
+  % formerly did git root directory ("git rev-parse --show-toplevel")
+  case os:getenv("HOME") of
+    false ->
+      os:getenv("%userprofile%"); % windows
+    Dir ->
+      Dir
+  end.
 
 select(Key, L) ->
   element(2, lists:keyfind(Key, 1, L)).

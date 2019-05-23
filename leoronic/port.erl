@@ -17,7 +17,7 @@
 ).
 -import(
 utils,
-[git_root_directory/0]
+[root_directory/0]
 ).
 -export([start/0, stop/0, init/0]).
 -dialyzer({nowarn_function, [connect_to_pipe_and_loop/0, init/0]}).
@@ -30,7 +30,7 @@ stop() ->
   leoronic_port ! stop.
 
 pipe_name() ->
-  filename:join(git_root_directory(), "leoronic.pipe").
+  filename:join(root_directory(), "leoronic.pipe").
 
 init() ->
   register(leoronic_port, self()),
@@ -98,18 +98,24 @@ loop(Pipe) ->
       exit(port_terminated)
   end.
 
+list_to_bool(S) ->
+  case string:lowercase(S) of
+    "true" -> true;
+    "false" -> false
+  end.
 
 format_task_str(TaskStr) ->
-  [Await, CPUS, Memory, Storage, Dockerless, Container] =
-    string:tokens(TaskStr, "\""), % todo desuck this
+  [ClientId, Await, CPUS, Memory, Storage, Dockerless, Container] =
+    string:tokens(TaskStr, ", "), % todo desuck this
   [
+    {client_id}, ClientId,
     {port_pid, self()},
-    {await, Await},
-    {cpus, CPUS},
-    {memory, Memory},
-    {storage, Storage},
-    {dockerless, Dockerless},
-    {container, Container}
+    {await, list_to_bool(Await)},
+    {cpus, list_to_float(CPUS)},
+    {memory, list_to_integer(Memory)},
+    {storage, list_to_integer(Storage)},
+    {dockerless, list_to_bool(Dockerless)},
+    {container, base64:decode(Container)}
   ].
 
 
@@ -135,8 +141,8 @@ task_to_str(Task) ->
     "\"created_at=\"" ++ CreatedAt ++
     "\"started_at=\"" ++ StartedAt ++
     "\"finished_at=\"" ++ FinishedAt ++
-    "\"stdout=\"" ++ StdOut ++
-    "\"stderr=\"" ++ StdErr ++
+    "\"stdout=\"" ++ base64:encode(StdOut) ++
+    "\"stderr=\"" ++ base64:encode(StdErr) ++
     "\"result=\"" ++ Result ++
     "\"".
 
@@ -147,6 +153,27 @@ to_head(Type, Value) ->
     Response -> Response
   end.
 
+bs() ->
+  list_to_binary(" ").
+
+as_bin(Response) ->
+  case Response of
+    {new_task_id, ClientId, TaskId} ->
+      atom_to_binary(new_task_id)
+      ++ bs()
+      ++ list_to_binary(ClientId)
+      ++ bs()
+      ++ list_to_binary(TaskId);
+    {task_complete, Task} ->
+      atom_to_binary(task_complete)
+      ++ bs()
+      ++ list_to_binary(task_to_str(Task));
+    {task_not_complete, TaskId} ->
+      atom_to_binary(task_not_complete)
+      ++ bs()
+      ++ list_to_binary(TaskId)
+  end.
+
 
 head_resp_to_pipe(Pipe, Type, Value) ->
-  spawn(fun () -> Pipe ! {self(), to_head(Type, Value)} end).
+  spawn(fun() -> Pipe ! as_bin(to_head(Type, Value)) end).

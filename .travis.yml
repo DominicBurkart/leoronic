@@ -1,9 +1,54 @@
-language: erlang
-otp_release:
-  - 21.3
-script:
-  - bash dev_install.sh
-  - bash .run_dialyzer
-  - ./.elvis rock
-  - shellcheck *.sh
+matrix:
+  include:
+    - name: "erlang & bash static analysis & styling"
+      language: erlang
+      otp_release: 21.3
+      install:
+        - bash dev_install.sh
+      script:
+        - bash .run_dialyzer
+        - ./.elvis rock
+        - shellcheck *.sh
 
+    - name: "python static analysis & styling"
+      language: python
+      dist: xenial
+      python: "3.7"
+      cache: pip
+      install:
+        - pip install black mypy dill
+      script:
+        - black wrappers/python3
+        - mypy wrappers/python3
+
+    - name: "python tests"
+      language: python
+      dist: xenial
+      python: "3.7"
+      cache: pip
+      install:
+        - pip install pytest pytest-cov dill
+      script:
+        - pytest --cov=./ wrappers/python3/leoronic.py
+#    - name: "erlang x python integration tests"
+#      language: erlang
+#      otp_release: 21.3
+#      dist: xenial
+#      python: "3.7"
+#      script:
+#        - (cd leoronic && erlc +native +debug *.erl) && erl -name leoronic -setcookie `cat .leoronic_cookie` -s leoronic
+#        - python3 tests/integration.py
+#
+#    - name: "python x docker (no erlang)"
+#      language: python
+#      dist: xenial
+#      python: "3.7"
+#      addons:
+#        apt:
+#          sources:
+#            - docker-xenial
+#          packages:
+#            - docker
+#      script:
+#        - docker pull dominicburkart/leoronic
+#        - docker run dominicburkart/leoronic & python3 tests/integration.py  # todo
