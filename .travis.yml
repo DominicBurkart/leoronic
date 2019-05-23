@@ -29,7 +29,7 @@ matrix:
       install:
         - pip install pytest pytest-cov dill
       script:
-        - pytest --cov=./ wrappers/python3/*.py
+        - pytest --cov=./ wrappers/python3/leoronic.py
 #    - name: "erlang x python integration tests"
 #      language: erlang
 #      otp_release: 21.3
