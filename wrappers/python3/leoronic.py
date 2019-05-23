@@ -100,7 +100,7 @@ class CompletedTask(LeoronicBaseClass):
     result: str
 
 
-class MessageType(Enum, LeoronicBaseClass):
+class MessageType(LeoronicBaseClass, Enum):
     new_task_id = "new_task_id"
     task_complete = "task_complete"
     task_not_complete = "task_not_complete"
