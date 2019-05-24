@@ -31,7 +31,7 @@ matrix:
             - docker-xenial
           packages:
             - docker
-      cache: pip apt
+      cache: pip
       install:
         - pip install pytest pytest-cov codecov dill
         - docker pull dominicburkart/leoronic
