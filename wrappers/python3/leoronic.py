@@ -214,7 +214,7 @@ def message_type(message: str) -> MessageType:
 
 def store_response(message: str) -> None:
     # todo verify that this method (storing messages in dictionaries) is parallel-safe
-    if message.strip() == "":
+    if message.strip() != "":
         t = message_type(message)
 
         if t == MessageType.new_task_id:
