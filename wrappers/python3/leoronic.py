@@ -141,6 +141,8 @@ except Exception as e:
 result_pipe.close()
 """.replace(
     "\n", "; "
+).replace(
+    '"', "'"
 )
 container_template = f"""\
 FROM python:{major}.{minor}

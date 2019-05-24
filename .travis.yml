@@ -36,8 +36,7 @@ matrix:
         - pip install pytest pytest-cov codecov dill
         - docker pull dominicburkart/leoronic
       script:
-        - docker run dominicburkart/leoronic
-        - pytest --cov=./ wrappers/python3/leoronic.py tests/integration.py
+        - docker run -d -v /var/run/docker.sock:/var/run/docker.sock dominicburkart/leoronic && pytest --cov=./ wrappers/python3/leoronic.py tests/integration.py
         - codecov
 #    - name: "erlang x python integration tests"
 #      language: erlang
