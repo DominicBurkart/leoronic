@@ -3,4 +3,4 @@ Add * /
 ADD leoronic/* leoronic/
 ADD ebin/* ebin/
 RUN cd leoronic && erlc +native *.erl
-CMD erl -name leoronic -setcookie `cat .leoronic_cookie` -s leoronic
+CMD erl -sname leoronic -setcookie `cat .leoronic_cookie` -s leoronic
