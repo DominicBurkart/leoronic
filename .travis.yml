@@ -21,7 +21,7 @@ matrix:
         - black wrappers/python3
         - mypy wrappers/python3
 
-    - name: "python tests"
+    - name: "python tests & python x docker integration tests"
       language: python
       dist: xenial
       python: "3.7"
@@ -33,19 +33,30 @@ matrix:
             - docker
       cache: pip
       install:
-        - pip install pytest pytest-cov codecov dill
+        - pip install pytest pytest-cov codecov
+        - pip install -r requirements.txt
         - docker pull dominicburkart/leoronic
       script:
         - docker run -d -v /var/run/docker.sock:/var/run/docker.sock dominicburkart/leoronic && pytest --cov=./ wrappers/python3/leoronic.py tests/integration.py
         - codecov
-#    - name: "erlang x python integration tests"
-#      language: erlang
-#      otp_release: 21.3
-#      dist: xenial
-#      python: "3.7"
-#      script:
-#        - (cd leoronic && erlc +native +debug *.erl) && erl -name leoronic -setcookie `cat .leoronic_cookie` -s leoronic
-#        - python3 tests/integration.py
+
+    - name: "erlang x python integration tests"
+      language: erlang
+      otp_release: 21.3
+      cache: pip
+      before_install:
+        - pyenv install 3.7.0a1
+        - pyenv global 3.7.0a1
+      install:
+        - pip install pytest pytest-cov codecov
+        - pip install -r requirements.txt
+      script:
+        - |
+          (
+            (cd leoronic && erlc +debug *.erl) &&
+            erl -sname leoronic -setcookie `cat .leoronic_cookie` -s leoronic
+          ) & pytest tests/integration.py
+
 #
 #    - name: "python x docker (no erlang)"
 #      language: python

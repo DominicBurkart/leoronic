@@ -40,7 +40,7 @@ pipe_name(Type) ->
 init() ->
   register(leoronic_port, self()),
   process_flag(trap_exit, true),
-  make_pipe(),
+  make_pipes(),
   connect_to_pipe_and_loop().
 
 pipe_cmd(Cmd) when is_list(Cmd) ->
