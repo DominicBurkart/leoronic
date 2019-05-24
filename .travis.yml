@@ -1,6 +1,6 @@
 matrix:
   include:
-    - name: "erlang & bash static analysis & styling"
+    - name: "erlang x bash static analysis & styling"
       language: erlang
       otp_release: 21.3
       install:
@@ -10,13 +10,31 @@ matrix:
         - ./.elvis rock
         - shellcheck *.sh
 
+    - name: "erlang x python integration tests"
+      language: erlang
+      otp_release: 21.3
+      cache: pip
+      before_install:
+        - pyenv install 3.7.0a1
+        - pyenv global 3.7.0a1
+      install:
+        - pip install pytest pytest-cov codecov
+        - pip install -r requirements.txt
+        - cd core && erlc +debug *.erl
+      script:
+        - |
+          (
+            erl -sname leoronic -setcookie `cat .leoronic_cookie` -pa core -s leoronic
+          ) & pytest tests/test_integration.py
+
     - name: "python static analysis & styling"
       language: python
       dist: xenial
       python: "3.7"
       cache: pip
       install:
-        - pip install black mypy dill
+        - pip install -r requirements.txt
+        - pip install black mypy
       script:
         - black wrappers/python3
         - mypy wrappers/python3
@@ -37,37 +55,6 @@ matrix:
         - pip install -r requirements.txt
         - docker pull dominicburkart/leoronic
       script:
-        - docker run -d -v /var/run/docker.sock:/var/run/docker.sock dominicburkart/leoronic && pytest --cov=./ wrappers/python3/leoronic.py tests/integration.py
+        - docker run -d -v /var/run/docker.sock:/var/run/docker.sock dominicburkart/leoronic && pytest --cov=./
+      after_success:
         - codecov
-
-    - name: "erlang x python integration tests"
-      language: erlang
-      otp_release: 21.3
-      cache: pip
-      before_install:
-        - pyenv install 3.7.0a1
-        - pyenv global 3.7.0a1
-      install:
-        - pip install pytest pytest-cov codecov
-        - pip install -r requirements.txt
-      script:
-        - |
-          (
-            (cd leoronic && erlc +debug *.erl) &&
-            erl -sname leoronic -setcookie `cat .leoronic_cookie` -s leoronic
-          ) & pytest tests/integration.py
-
-#
-#    - name: "python x docker (no erlang)"
-#      language: python
-#      dist: xenial
-#      python: "3.7"
-#      addons:
-#        apt:
-#          sources:
-#            - docker-xenial
-#          packages:
-#            - docker
-#      script:
-#        - docker pull dominicburkart/leoronic
-#        - docker run dominicburkart/leoronic & python3 tests/integration.py  # todo

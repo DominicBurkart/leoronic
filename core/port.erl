@@ -124,7 +124,11 @@ format_task_str(TaskStr) ->
     {client_id}, ClientId,
     {port_pid, self()},
     {await, list_to_bool(Await)},
-    {cpus, list_to_float(CPUS)},
+    {cpus, case string:to_float(CPUS) of
+             {error,no_float} -> list_to_integer(CPUS);
+             {F,_Rest} -> F
+           end
+    },
     {memory, list_to_integer(Memory)},
     {storage, list_to_integer(Storage)},
     {dockerless, list_to_bool(Dockerless)},
@@ -169,6 +173,9 @@ to_head(Type, Value) ->
 bs() ->
   list_to_binary(" ").
 
+bn() ->
+  list_to_binary("\n").
+
 as_bin(Response) ->
   case Response of
     {new_task_id, ClientId, TaskId} ->
@@ -176,15 +183,18 @@ as_bin(Response) ->
       ++ bs()
       ++ list_to_binary(ClientId)
       ++ bs()
-      ++ list_to_binary(TaskId);
+      ++ list_to_binary(TaskId)
+      ++ bn();
     {task_complete, Task} ->
       atom_to_binary(task_complete, utf8)
       ++ bs()
-      ++ list_to_binary(task_to_str(Task));
+      ++ list_to_binary(task_to_str(Task))
+      ++ bn();
     {task_not_complete, TaskId} ->
       atom_to_binary(task_not_complete, utf8)
       ++ bs()
       ++ list_to_binary(TaskId)
+      ++ bn()
   end.
 
 

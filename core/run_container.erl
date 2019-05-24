@@ -80,8 +80,11 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
     ),
   DockerBuildCommand =
     "echo \"" ++
-    Container ++
-    "\" | docker build -t " ++
+    string:replace(
+      Container,
+      "LEORONIC_RESULT",
+      "result"++TaskIdStr
+    ) ++ "\" | docker build -t " ++
     ImageName ++
     " -f- .", % todo these containers shouldn't need build contexts (the ".")
   DockerRunCommand =

@@ -1,4 +1,4 @@
-from leoronic import *
+from ..wrappers import *
 
 
 def test_apply():
@@ -15,8 +15,9 @@ def test_apply_async():
 def test_apply_async_print():
     async_print = apply_async(lambda x: print(x), "value of x printed to stdout")
     assert async_print.get() == None
-    assert async_print.get_stderr() == ""
-    assert async_print.get_stdout() == "value of x printed to stdout"
+    r = async_print.get_record()
+    assert r.stderr == ""
+    assert r.stdout == "value of x printed to stdout"
 
 
 def test_blocking_functions():

@@ -1,4 +1,4 @@
-from wrappers.python3.leoronic import (
+from .wrappers import (
     apply,
     apply_async,
     map,

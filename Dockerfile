@@ -1,6 +1,6 @@
 FROM erlang:21
 Add * /
-ADD leoronic/* leoronic/
+ADD core/* core/
 ADD ebin/* ebin/
-RUN cd leoronic && erlc +native *.erl
+RUN cd core && erlc +native *.erl
 CMD erl -sname leoronic -setcookie `cat .leoronic_cookie` -s leoronic

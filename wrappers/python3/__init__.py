@@ -1,16 +1,15 @@
-import builtins
 import base64
+import builtins
 import datetime
 import functools
 import os
-import pipes
 import random
 import re
 import sys
-from io import TextIOWrapper
 from dataclasses import dataclass
 from enum import Enum
 from typing import (
+    cast,
     Set,
     Iterable,
     Dict,
@@ -18,6 +17,7 @@ from typing import (
     TypeVar,
     List,
     Any,
+    IO,
     Optional,
     Union,
     Iterator,
@@ -53,14 +53,6 @@ class BadInputError(LeoronicError):
 
 class MessageTypeNotFound(LeoronicError):
     pass
-
-
-@dataclass
-class AsyncTask(LeoronicBaseClass):
-    id: TaskId
-
-    def get(self) -> Output:
-        return handle_completed(get_completed(self.id))
 
 
 @dataclass
@@ -105,6 +97,17 @@ class CompletedTask(LeoronicBaseClass):
     result: str
 
 
+@dataclass
+class AsyncTask(LeoronicBaseClass):
+    id: TaskId
+
+    def get_record(self) -> CompletedTask:
+        return get_completed(self.id)
+
+    def get(self) -> Output:
+        return handle_completed(self.get_record())
+
+
 class MessageType(LeoronicBaseClass, Enum):
     new_task_id = "new_task_id"
     task_complete = "task_complete"
@@ -128,11 +131,8 @@ unclaimed_id_maps: Dict[ClientId, TaskId] = dict()
 command_template = """\
 import dill
 import base64
-import pipes
 
-t = pipes.Template()
-t.append("tr a-z A-Z", "--")
-result_pipe = t.open("result", "w")
+result_pipe = open("LEORONIC_RESULT", "w")
 f = dill.loads(base64.b64decode("{}".encode()))
 try:
     result_pipe.write("r" + base64.b64encode(dill.dumps(f()).encode()).decode())
@@ -154,18 +154,17 @@ CMD  python -c "{command_template}"
 ### internal functions
 
 
-def _pipe(pipe_name: str, type: str) -> TextIOWrapper:
+def _pipe(pipe_name: str, mode: str) -> IO[str]:
+    path = os.path.join(cast(str, settings["pipe_dir"]), pipe_name)
+    return open(path, mode=mode, encoding="ascii")
     # actual pipe creation & deletion is handled in erlang.
-    t = pipes.Template()
-    t.append("tr a-z A-Z", "--")
-    return t.open(os.path.join(settings["pipe_dir"], pipe_name), type)  # type: ignore
 
 
-def pipe_write() -> TextIOWrapper:
+def pipe_write() -> IO[str]:
     return _pipe("leoronic_in.pipe", "w")
 
 
-def pipe_read() -> TextIOWrapper:
+def pipe_read() -> IO[str]:
     return _pipe("leoronic_out.pipe", "r")
 
 
@@ -176,7 +175,7 @@ def _parse_str_to_dict(s: str) -> Dict[str, str]:
     }
 
 
-def _fields(o: object) -> Iterable[str]:
+def fields(o: object) -> Iterable[str]:
     return o.__annotations__.keys()
 
 
@@ -197,11 +196,11 @@ def parse_task_response(response: str) -> CompletedTask:
         finished_at=_str_to_date(d["finished_at"]),
         result=decode(d["result"]),
         stdout=decode(d["stdout"]),
-        stderr=decode(d["stdout"]),
+        stderr=decode(d["stderr"]),
     )
 
 
-def _get_next_client_id() -> int:
+def get_next_client_id() -> int:
     return (os.getpid() * (10 ** 10)) + random.randint(1, 10 ** 10)
 
 
@@ -232,7 +231,7 @@ def store_response(message: str) -> None:
 
 
 def send_task(task: InputTask) -> TaskId:
-    task._client_id = _get_next_client_id()
+    task._client_id = get_next_client_id()
     task_id = None
 
     with pipe_write() as pipe:
@@ -279,8 +278,8 @@ def make_container(function: Callable[[], Any]) -> str:
     return container_template.format(base64.b64encode(dill.dumps(function)).decode())
 
 
-def _variable_intersection(o1: object, o2: object) -> Set:
-    return set(_fields(o1)).intersection(set(_fields(o2)))
+def variable_intersection(o1: object, o2: object) -> Set:
+    return set(fields(o1)).intersection(set(fields(o2)))
 
 
 def check_reqs(reqs: Reqs, bad_fields: Iterable[str]) -> None:
@@ -372,8 +371,7 @@ def imap(
 def imap_unordered(
     fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
 ) -> Iterable[Output]:
-    asyncs = map_async(fun, iterable, reqs)
-    for completed in await_tasks(set(a.id for a in asyncs)):
+    for completed in await_tasks(set(a.id for a in map_async(fun, iterable, reqs))):
         yield handle_completed(completed)
 
 
@@ -387,108 +385,3 @@ def starmap_async(
     fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
 ) -> List[AsyncTask]:
     return map_async(fun, iterable, reqs)
-
-
-### tests & test helpers
-
-
-def test_fields():
-    class DummyClass:
-        v1: str = "hi"
-        v2: int = 10
-
-        def m1(self):
-            return self.v1 + str(self.v2)
-
-    d = DummyClass()
-    assert list(_fields(d)) == ["v1", "v2"]
-    assert list(_fields(DummyClass)) == ["v1", "v2"]
-
-
-def test_input_task_and_completed_task_have_no_overlapping_fields():
-    assert len(_variable_intersection(InputTask, CompletedTask)) == 0
-
-
-def test_docker_wrapper_template_has_one_set_of_brackets():
-    assert command_template.count("{}") == 1
-
-
-def _test_parse_task_response():
-    test = """
-        id="1"
-        created_at="1558540420"
-        started_at="1558540425"
-        finished_at="1558540430"
-        stdout="stdoutbase64string"
-        stderr="stderrbase64string"
-        result="resultbase64string"
-    """.replace(
-        "\n", ""
-    ).replace(
-        " ", ""
-    )
-    resp = parse_task_response(test)
-    assert resp == CompletedTask(
-        id=1,
-        created_at=datetime.datetime(2019, 5, 22, 15, 53, 40),  # utc
-        started_at=datetime.datetime(2019, 5, 22, 15, 53, 45),
-        finished_at=datetime.datetime(2019, 5, 22, 15, 53, 50),
-        stdout=base64.b64decode("stdoutbase64string".encode()).decode(),
-        stderr=base64.b64decode("stderrbase64string".encode()).decode(),
-        result=base64.b64decode("resultbase64string".encode()).decode(),
-    )
-
-
-def test_apply():
-    assert apply(lambda x: x * x, 5) == 25
-
-
-def test_apply_async():
-    async_call = apply_async(lambda x: x * x, 5)
-    assert async_call.get() == 25
-    assert async_call.get_stderr() == ""
-    assert async_call.get_stdout() == ""
-
-
-def test_apply_async_print():
-    async_print = apply_async(lambda x: print(x), "value of x printed to stdout")
-    assert async_print.get() == None
-    assert async_print.get_stderr() == ""
-    assert async_print.get_stdout() == "value of x printed to stdout"
-
-
-def test_blocking_functions():
-    import multiprocessing
-
-    def f(x: int, y: int) -> int:
-        return x * y
-
-    inputs = [(x, y) for x in range(5) for y in range(5)]
-    starmap_output = starmap(f, inputs)
-    map_output = map(f, inputs)
-    imap_output = imap(f, inputs)
-    imap_unordered_output = imap_unordered(f, inputs)
-
-    with multiprocessing.Pool() as p:
-        multi_output = p.starmap(f, inputs)
-
-    assert starmap_output == multi_output
-    assert map_output == multi_output
-    assert imap_output == multi_output
-    assert all(v in multi_output for v in imap_unordered_output)
-
-
-def test_async_functions():
-    import multiprocessing
-
-    def f(x: int, y: int):
-        return x * y
-
-    inputs = [(x, y) for x in range(5) for y in range(5)]
-    starmap_output = [a.get() for a in starmap_async(f, inputs)]
-    map_output = [a.get() for a in map_async(f, inputs)]
-    with multiprocessing.Pool() as p:
-        multi_output = p.starmap(f, inputs)
-
-    assert starmap_output == multi_output
-    assert map_output == multi_output
