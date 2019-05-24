@@ -7,6 +7,7 @@ import pipes
 import random
 import re
 import sys
+from io import TextIOWrapper
 from dataclasses import dataclass
 from enum import Enum
 from typing import (
@@ -111,11 +112,11 @@ class MessageType(LeoronicBaseClass, Enum):
 
 
 ### fields
-
+default_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic.pipe")
 settings = {
     "await_unknown_tasks": False,
     # ^ when false, checks if a task was sent to leoronic & fails
-    "pipe_path": os.path.join(os.path.expanduser("~"), "leoronic.pipe"),
+    "pipe_path": default_pipe,
 }
 running_tasks: Dict[TaskId, "InputTask"] = dict()
 completed_tasks: Dict[TaskId, "CompletedTask"] = dict()
@@ -151,10 +152,19 @@ CMD  python -c "{command_template}"
 ### internal functions
 
 
-def leoronic_pipe():  # pipe creation & deletion is handled in erlang.
+def _pipe(type: str) -> TextIOWrapper:
+    # actual pipe creation & deletion is handled in erlang.
     t = pipes.Template()
     t.append("tr a-z A-Z", "--")
-    return t.open(settings["pipe_path"], "w")
+    return t.open(settings["pipe_path"], type)  # type: ignore
+
+
+def pipe_write() -> TextIOWrapper:
+    return _pipe("w")
+
+
+def pipe_read() -> TextIOWrapper:
+    return _pipe("r")
 
 
 def _parse_str_to_dict(s: str) -> Dict[str, str]:
@@ -172,6 +182,10 @@ def _str_to_date(s: str) -> datetime.datetime:
     return datetime.datetime.utcfromtimestamp(int(s))
 
 
+def decode(s: str) -> str:
+    return base64.b64decode(s.encode()).decode()
+
+
 def parse_task_response(response: str) -> CompletedTask:
     d = _parse_str_to_dict(response)
     return CompletedTask(
@@ -179,9 +193,9 @@ def parse_task_response(response: str) -> CompletedTask:
         created_at=_str_to_date(d["created_at"]),
         started_at=_str_to_date(d["started_at"]),
         finished_at=_str_to_date(d["finished_at"]),
-        result=base64.b64decode(d["result"].encode()).decode(),
-        stdout=base64.b64decode(d["stdout"].encode()).decode(),
-        stderr=base64.b64decode(d["stdout"].encode()).decode(),
+        result=decode(d["result"]),
+        stdout=decode(d["stdout"]),
+        stderr=decode(d["stdout"]),
     )
 
 
@@ -218,8 +232,10 @@ def send_task(task: InputTask) -> TaskId:
     task._client_id = _get_next_client_id()
     task_id = None
 
-    with leoronic_pipe() as pipe:
+    with pipe_write() as pipe:
         pipe.write(f"add task {str(task)}")
+
+    with pipe_read() as pipe:
         while task_id is None:
             store_response(pipe.read())
             task_id = unclaimed_id_maps.pop(task._client_id, None)
@@ -247,7 +263,8 @@ def await_tasks(ids: Set[TaskId]) -> Iterator[CompletedTask]:
     for task_id in ids.intersection(completed_tasks.keys()):
         yield completed_tasks[task_id]
         collected += 1
-    with leoronic_pipe() as pipe:
+
+    with pipe_read() as pipe:
         while collected < len(ids):
             store_response(pipe.read())
             for task_id in ids.intersection(completed_tasks.keys()):
