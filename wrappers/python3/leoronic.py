@@ -212,20 +212,21 @@ def message_type(message: str) -> MessageType:
 
 def store_response(message: str) -> None:
     # todo verify that this method (storing messages in dictionaries) is parallel-safe
-    t = message_type(message)
+    if message.strip() == "":
+        t = message_type(message)
 
-    if t == MessageType.new_task_id:
-        _, client, task = message.split(" ")
-        unclaimed_id_maps[int(client)] = task
+        if t == MessageType.new_task_id:
+            _, client, task = message.split(" ")
+            unclaimed_id_maps[int(client)] = task
 
-    elif t == MessageType.task_complete:
-        _, response = message.split(" ", maxsplit=1)
-        completed = parse_task_response(response)
-        running_tasks.pop(completed.id)
-        completed_tasks[completed.id] = completed
+        elif t == MessageType.task_complete:
+            _, response = message.split(" ", maxsplit=1)
+            completed = parse_task_response(response)
+            running_tasks.pop(completed.id)
+            completed_tasks[completed.id] = completed
 
-    else:
-        raise NotImplementedError
+        else:
+            raise NotImplementedError
 
 
 def send_task(task: InputTask) -> TaskId:
