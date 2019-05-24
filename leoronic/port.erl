@@ -29,8 +29,13 @@ start() ->
 stop() ->
   leoronic_port ! stop.
 
-pipe_name() ->
-  filename:join(root_directory(), "leoronic.pipe").
+pipe_name(Type) ->
+  case Type of
+    in ->
+      filename:join(root_directory(), "leoronic_in.pipe");
+    out ->
+      filename:join(root_directory(), "leoronic_out.pipe")
+  end.
 
 init() ->
   register(leoronic_port, self()),
@@ -38,63 +43,71 @@ init() ->
   make_pipe(),
   connect_to_pipe_and_loop().
 
-make_pipe() ->
-  os:cmd("mkfifo " ++ pipe_name()).
+pipe_cmd(Cmd) when is_list(Cmd) ->
+  [os:cmd(Cmd ++ " " ++ pipe_name(Pipe)) || Pipe <- [in, out]].
 
-remove_pipe() ->
-  os:cmd("rm " ++ pipe_name()).
+make_pipes() ->
+  pipe_cmd("mkfifo").
+
+remove_pipes() ->
+  pipe_cmd("rm").
 
 connect_to_pipe_and_loop() ->
-  PipeName = pipe_name(),
-  case open_port(PipeName, [eof]) of
-    Pipe when erlang:is_port(Pipe) ->
-      loop(Pipe);
+  case open_port(pipe_name(in), [eof]) of
+    PipeIn when erlang:is_port(PipeIn) ->
+      case open_port(pipe_name(out), [eof]) of
+        PipeOut when erlang:is_port(PipeOut) ->
+          loop(PipeIn, PipeOut);
+        Error ->
+          Error
+      end;
     Error ->
       Error
   end.
 
-loop(Pipe) ->
+loop(PipeIn, PipeOut) ->
   receive
-    {Pipe, {data, Str}} ->
+    {PipeIn, {data, Str}} ->
       case Str of
         "add task " ++ TaskStr ->
-          head_resp_to_pipe(Pipe, add_task, format_task_str(TaskStr));
+          head_resp_to_pipe(PipeOut, add_task, format_task_str(TaskStr));
         "remove task " ++ TaskId ->
-          head_resp_to_pipe(Pipe, remove_task, TaskId);
+          head_resp_to_pipe(PipeOut, remove_task, TaskId);
         "retrieve task " ++ TaskId ->
-          head_resp_to_pipe(Pipe, retrieve, TaskId);
+          head_resp_to_pipe(PipeOut, retrieve, TaskId);
         "all heads true" ->
-          head_resp_to_pipe(Pipe, all_heads, true);
+          head_resp_to_pipe(PipeOut, all_heads, true);
         "all heads false" ->
-          head_resp_to_pipe(Pipe, all_heads, false);
+          head_resp_to_pipe(PipeOut, all_heads, false);
         "has outstanding" ->
-          head_resp_to_pipe(Pipe, has_outstanding, undefined);
+          head_resp_to_pipe(PipeOut, has_outstanding, undefined);
         "save state " ++ StateName ->
-          head_resp_to_pipe(Pipe, save_state, StateName);
+          head_resp_to_pipe(PipeOut, save_state, StateName);
         "resume state " ++ StateName ->
-          head_resp_to_pipe(Pipe, resume_state, StateName);
+          head_resp_to_pipe(PipeOut, resume_state, StateName);
         "remove state " ++ StateName ->
-          head_resp_to_pipe(Pipe, remove_state, StateName);
+          head_resp_to_pipe(PipeOut, remove_state, StateName);
         "idle true" ->
-          head_resp_to_pipe(Pipe, idle, true);
+          head_resp_to_pipe(PipeOut, idle, true);
         "idle false" ->
-          head_resp_to_pipe(Pipe, idle, false)
+          head_resp_to_pipe(PipeOut, idle, false)
       end,
-      loop(Pipe);
+      loop(PipeIn, PipeOut);
     {Pipe, eof} ->
       connect_to_pipe_and_loop();
     {task_complete, CompletedTask} ->
-      Pipe ! {self(), {data, task_to_str(CompletedTask)}},
-      loop(Pipe);
+      PipeOut ! {self(), {data, task_to_str(CompletedTask)}},
+      loop(PipeIn, PipeOut);
     stop ->
-      Pipe ! {self(), close},
+      PipeIn ! {self(), close},
+      PipeOut ! {self(), close},
       receive
-        {Pipe, closed} ->
-          remove_pipe(),
+        {_, closed} ->
+          remove_pipes(),
           exit(normal)
       end;
     {'EXIT', Pipe, Reason} ->
-      remove_pipe(),
+      remove_pipes(),
       exit(port_terminated)
   end.
 

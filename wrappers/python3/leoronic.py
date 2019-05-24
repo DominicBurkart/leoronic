@@ -112,11 +112,11 @@ class MessageType(LeoronicBaseClass, Enum):
 
 
 ### fields
-default_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic.pipe")
+default_pipe_dir: str = os.path.expanduser("~")
 settings = {
     "await_unknown_tasks": False,
     # ^ when false, checks if a task was sent to leoronic & fails
-    "pipe_path": default_pipe,
+    "pipe_dir": default_pipe_dir,
 }
 running_tasks: Dict[TaskId, "InputTask"] = dict()
 completed_tasks: Dict[TaskId, "CompletedTask"] = dict()
@@ -152,19 +152,19 @@ CMD  python -c "{command_template}"
 ### internal functions
 
 
-def _pipe(type: str) -> TextIOWrapper:
+def _pipe(pipe_name: str, type: str) -> TextIOWrapper:
     # actual pipe creation & deletion is handled in erlang.
     t = pipes.Template()
     t.append("tr a-z A-Z", "--")
-    return t.open(settings["pipe_path"], type)  # type: ignore
+    return t.open(os.path.join(settings["pipe_dir"], pipe_name), type)  # type: ignore
 
 
 def pipe_write() -> TextIOWrapper:
-    return _pipe("w")
+    return _pipe("leoronic_in.pipe", "w")
 
 
 def pipe_read() -> TextIOWrapper:
-    return _pipe("r")
+    return _pipe("leoronic_out.pipe", "r")
 
 
 def _parse_str_to_dict(s: str) -> Dict[str, str]:
