@@ -61,6 +61,7 @@ make_state() ->
 
 init(State) -> % todo where to declare process_flag(trap_exit, true),
   spawn_kid(leoronic, alert_new_node, []),
+  spawn_kid(port, start, []),
   case check_should_be_head() of
     is_head ->
       spawn_kid(head, head, []);
