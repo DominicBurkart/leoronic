@@ -14,7 +14,7 @@
 link_to_leoronic/0
 ]).
 -import(run_container, [
-run_container/2
+run_container/3
 ]).
 -import(utils, [select/2, sub/2]).
 -export([
@@ -61,6 +61,7 @@ make_state() ->
 
 init(State) -> % todo where to declare process_flag(trap_exit, true),
   spawn_kid(leoronic, alert_new_node, []),
+  spawn_kid(port, start, []),
   case check_should_be_head() of
     is_head ->
       spawn_kid(head, head, []);
@@ -69,11 +70,11 @@ init(State) -> % todo where to declare process_flag(trap_exit, true),
   end,
   {ok, State}.
 
-handle_cast({perform_task, Task}, _State) ->
+handle_cast({perform_task, Task}, State) ->
   CompletedTaskInfo = perform_task(Task),
   head:head_pid() ! CompletedTaskInfo,
   % todo is there a better way to do this? sending head might not be receiving head
-  {noreply}.
+  {noreply, State}.
 
 handle_call(send_system_info, _From, State) ->
   {reply, send_system_info(), State};
@@ -102,13 +103,13 @@ code_change(_, State, _) ->
 
 
 perform_task(Task) ->
-  [TaskId] = sub([id], Task),
+  [{id, TaskId}] = sub([id], Task),
   impute_task_values(
     Task,
     run_container(
       select(container, Task),
       sub([memory, storage, cpus], Task),
-      TaskId
+      integer_to_list(TaskId)
     )
   ).
 
@@ -176,14 +177,14 @@ loop_check_should_be_head() ->
 alert_new_node() ->
   [{leoronic, N} ! new_node_initialized || N <- nodes()].
 
+impute_task_values_helper(Old, [{UpdatingKey, UpdatingValue}]) ->
+  lists:keyreplace(UpdatingKey, 1, Old, {UpdatingKey, UpdatingValue});
 
-impute_task_values_helper(Old, []) ->
-  Old;
-
-
-impute_task_values_helper(Old, [[UpdatingKey, UpdatingValue] | New]) ->
-  impute_task_values_helper(lists:keyreplace(UpdatingKey, 1, Old, UpdatingValue), New).
-
+impute_task_values_helper(Old, [{UpdatingKey, UpdatingValue} | New]) ->
+  impute_task_values_helper(
+   lists:keyreplace(UpdatingKey, 1, Old, {UpdatingKey, UpdatingValue}),
+    New
+  ).
 
 impute_task_values(Task, Values) ->
   impute_task_values_helper(Task, [{has_run, true} | Values]).

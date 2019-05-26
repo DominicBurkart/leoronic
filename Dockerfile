@@ -1,6 +1,5 @@
 FROM erlang:21
-Add * /
-ADD leoronic/* leoronic/
-ADD ebin/* ebin/
-RUN cd leoronic && erlc +native +debug *.erl
-CMD erl -name leoronic -setcookie `cat .leoronic_cookie` -s leoronic
+ADD .leoronic_cookie /
+ADD core/* core/
+RUN cd core && erlc +native *.erl
+CMD erl -sname leoronic -setcookie `cat .leoronic_cookie` -pa core -s leoronic

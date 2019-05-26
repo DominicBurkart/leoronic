@@ -1,15 +1,14 @@
-import builtins
 import base64
+import builtins
 import datetime
 import functools
 import os
-import pipes
 import random
 import re
-import sys
 from dataclasses import dataclass
 from enum import Enum
 from typing import (
+    cast,
     Set,
     Iterable,
     Dict,
@@ -17,12 +16,15 @@ from typing import (
     TypeVar,
     List,
     Any,
+    IO,
     Optional,
     Union,
     Iterator,
 )
 
 import dill  # type: ignore
+
+from .docker_commands import container_template
 
 ### types
 
@@ -52,14 +54,6 @@ class BadInputError(LeoronicError):
 
 class MessageTypeNotFound(LeoronicError):
     pass
-
-
-@dataclass
-class AsyncTask(LeoronicBaseClass):
-    id: TaskId
-
-    def get(self) -> Output:
-        return handle_completed(get_completed(self.id))
 
 
 @dataclass
@@ -104,6 +98,17 @@ class CompletedTask(LeoronicBaseClass):
     result: str
 
 
+@dataclass
+class AsyncTask(LeoronicBaseClass):
+    id: TaskId
+
+    def get_record(self) -> CompletedTask:
+        return get_completed(self.id)
+
+    def get(self) -> Output:
+        return handle_completed(self.get_record())
+
+
 class MessageType(LeoronicBaseClass, Enum):
     new_task_id = "new_task_id"
     task_complete = "task_complete"
@@ -111,50 +116,32 @@ class MessageType(LeoronicBaseClass, Enum):
 
 
 ### fields
-
+default_pipe_dir: str = os.path.expanduser("~")
 settings = {
     "await_unknown_tasks": False,
     # ^ when false, checks if a task was sent to leoronic & fails
-    "pipe_path": os.path.join(os.path.expanduser("~"), "leoronic.pipe"),
+    "pipe_dir": default_pipe_dir,
 }
 running_tasks: Dict[TaskId, "InputTask"] = dict()
 completed_tasks: Dict[TaskId, "CompletedTask"] = dict()
 unclaimed_id_maps: Dict[ClientId, TaskId] = dict()
 
-### dockerfile container template
-
-(major, minor, _1, _2, _3) = sys.version_info
-command_template = """\
-import dill
-import base64
-import pipes
-
-t = pipes.Template()
-t.append("tr a-z A-Z", "--")
-result_pipe = t.open("result", "w")
-f = dill.loads(base64.b64decode("{}".encode()))
-try:
-    result_pipe.write("r" + base64.b64encode(dill.dumps(f()).encode()).decode())
-except Exception as e:
-    result_pipe.write("e" + base64.b64encode(dill.dumps(e).encode()).decode())
-result_pipe.close()
-""".replace(
-    "\n", "; "
-)
-container_template = f"""\
-FROM python:{major}.{minor}
-RUN  pip install dill
-CMD  python -c "{command_template}"
-"""
-
 
 ### internal functions
 
 
-def leoronic_pipe():  # pipe creation & deletion is handled in erlang.
-    t = pipes.Template()
-    t.append("tr a-z A-Z", "--")
-    return t.open(settings["pipe_path"], "w")
+def _pipe(pipe_name: str, mode: str) -> IO[str]:
+    path = os.path.join(cast(str, settings["pipe_dir"]), pipe_name)
+    return open(path, mode=mode, encoding="ascii")
+    # actual pipe creation & deletion is handled in erlang.
+
+
+def pipe_write() -> IO[str]:
+    return _pipe("leoronic_in.pipe", "w")
+
+
+def pipe_read() -> IO[str]:
+    return _pipe("leoronic_out.pipe", "r")
 
 
 def _parse_str_to_dict(s: str) -> Dict[str, str]:
@@ -164,12 +151,16 @@ def _parse_str_to_dict(s: str) -> Dict[str, str]:
     }
 
 
-def _fields(o: object) -> Iterable[str]:
+def fields(o: object) -> Iterable[str]:
     return o.__annotations__.keys()
 
 
 def _str_to_date(s: str) -> datetime.datetime:
     return datetime.datetime.utcfromtimestamp(int(s))
+
+
+def decode(s: str) -> str:
+    return base64.b64decode(s.encode()).decode()
 
 
 def parse_task_response(response: str) -> CompletedTask:
@@ -179,13 +170,13 @@ def parse_task_response(response: str) -> CompletedTask:
         created_at=_str_to_date(d["created_at"]),
         started_at=_str_to_date(d["started_at"]),
         finished_at=_str_to_date(d["finished_at"]),
-        result=base64.b64decode(d["result"].encode()).decode(),
-        stdout=base64.b64decode(d["stdout"].encode()).decode(),
-        stderr=base64.b64decode(d["stdout"].encode()).decode(),
+        result=decode(d["result"]),
+        stdout=decode(d["stdout"]),
+        stderr=decode(d["stderr"]),
     )
 
 
-def _get_next_client_id() -> int:
+def get_next_client_id() -> int:
     return (os.getpid() * (10 ** 10)) + random.randint(1, 10 ** 10)
 
 
@@ -198,28 +189,31 @@ def message_type(message: str) -> MessageType:
 
 def store_response(message: str) -> None:
     # todo verify that this method (storing messages in dictionaries) is parallel-safe
-    t = message_type(message)
+    if message.strip() != "":
+        t = message_type(message)
 
-    if t == MessageType.new_task_id:
-        _, client, task = message.split(" ")
-        unclaimed_id_maps[int(client)] = task
+        if t == MessageType.new_task_id:
+            _, client, task = message.split(" ")
+            unclaimed_id_maps[int(client)] = task
 
-    elif t == MessageType.task_complete:
-        _, response = message.split(" ", maxsplit=1)
-        completed = parse_task_response(response)
-        running_tasks.pop(completed.id)
-        completed_tasks[completed.id] = completed
+        elif t == MessageType.task_complete:
+            _, response = message.split(" ", maxsplit=1)
+            completed = parse_task_response(response)
+            running_tasks.pop(completed.id)
+            completed_tasks[completed.id] = completed
 
-    else:
-        raise NotImplementedError
+        else:
+            raise NotImplementedError
 
 
 def send_task(task: InputTask) -> TaskId:
-    task._client_id = _get_next_client_id()
+    task._client_id = get_next_client_id()
     task_id = None
 
-    with leoronic_pipe() as pipe:
+    with pipe_write() as pipe:
         pipe.write(f"add task {str(task)}")
+
+    with pipe_read() as pipe:
         while task_id is None:
             store_response(pipe.read())
             task_id = unclaimed_id_maps.pop(task._client_id, None)
@@ -247,7 +241,8 @@ def await_tasks(ids: Set[TaskId]) -> Iterator[CompletedTask]:
     for task_id in ids.intersection(completed_tasks.keys()):
         yield completed_tasks[task_id]
         collected += 1
-    with leoronic_pipe() as pipe:
+
+    with pipe_read() as pipe:
         while collected < len(ids):
             store_response(pipe.read())
             for task_id in ids.intersection(completed_tasks.keys()):
@@ -259,8 +254,8 @@ def make_container(function: Callable[[], Any]) -> str:
     return container_template.format(base64.b64encode(dill.dumps(function)).decode())
 
 
-def _variable_intersection(o1: object, o2: object) -> Set:
-    return set(_fields(o1)).intersection(set(_fields(o2)))
+def variable_intersection(o1: object, o2: object) -> Set:
+    return set(fields(o1)).intersection(set(fields(o2)))
 
 
 def check_reqs(reqs: Reqs, bad_fields: Iterable[str]) -> None:
@@ -352,8 +347,7 @@ def imap(
 def imap_unordered(
     fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
 ) -> Iterable[Output]:
-    asyncs = map_async(fun, iterable, reqs)
-    for completed in await_tasks(set(a.id for a in asyncs)):
+    for completed in await_tasks(set(a.id for a in map_async(fun, iterable, reqs))):
         yield handle_completed(completed)
 
 
@@ -367,53 +361,3 @@ def starmap_async(
     fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
 ) -> List[AsyncTask]:
     return map_async(fun, iterable, reqs)
-
-
-### tests & test helpers
-
-
-def test_fields():
-    class DummyClass:
-        v1: str = "hi"
-        v2: int = 10
-
-        def m1(self):
-            return self.v1 + str(self.v2)
-
-    d = DummyClass()
-    assert list(_fields(d)) == ["v1", "v2"]
-    assert list(_fields(DummyClass)) == ["v1", "v2"]
-
-
-def test_input_task_and_completed_task_have_no_overlapping_fields():
-    assert len(_variable_intersection(InputTask, CompletedTask)) == 0
-
-
-def test_docker_wrapper_template_has_one_set_of_brackets():
-    assert command_template.count("{}") == 1
-
-
-def _test_parse_task_response():
-    test = """\
-    id="1"
-    created_at="1558540420"
-    started_at="1558540425"
-    finished_at="1558540430"
-    stdout="stdoutbase64string"
-    stderr="stderrbase64string"
-    result="resultbase64string"
-    """.replace(
-        "\n", ""
-    ).replace(
-        " ", ""
-    )
-    resp = parse_task_response(test)
-    assert resp == CompletedTask(
-        id=1,
-        created_at=datetime.datetime(2019, 5, 22, 15, 53, 40),  # utc
-        started_at=datetime.datetime(2019, 5, 22, 15, 53, 45),
-        finished_at=datetime.datetime(2019, 5, 22, 15, 53, 50),
-        stdout=base64.b64decode("stdoutbase64string".encode()).decode(),
-        stderr=base64.b64decode("stderrbase64string".encode()).decode(),
-        result=base64.b64decode("resultbase64string".encode()).decode(),
-    )

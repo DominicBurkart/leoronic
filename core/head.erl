@@ -38,16 +38,18 @@ should_be_head(Node) when is_atom(Node) ->
   lists:member(Node, lists:sublist(sorted_nodes(), number_of_heads())).
 
 
-worker_head_tuples() ->
-  Nodes = sorted_nodes(),
+head_processes(Nodes) ->
   IndexedNodes = indexed(Nodes),
   NHeads = number_of_heads(),
   HeadIndexForEachNode =
     lists:seq(1, NHeads) ++ % each head node is its own head.
     [I rem NHeads + 1 || I <- lists:seq(NHeads, length(IndexedNodes))],
-  HeadProcesses =
-    [{head, element(2, lists:keyfind(I, 1, IndexedNodes))} || I <- HeadIndexForEachNode],
-  lists:zip(HeadProcesses, Nodes).
+  [{head, element(2, lists:keyfind(I, 1, IndexedNodes))} || I <- HeadIndexForEachNode].
+
+
+worker_head_tuples() ->
+  Nodes = sorted_nodes(),
+  lists:zip(head_processes(Nodes), Nodes).
 
 
 worker_pids(Head) ->
@@ -57,7 +59,7 @@ worker_pids(Head) ->
 head_pid() ->
   case should_be_head(node()) of
     true ->
-      lists:keysearch(node(), 2, heads());
+      {head, node()};
     false ->
       element(1, lists:keyfind(node(), 2, worker_head_tuples()))
   end.
