@@ -21,7 +21,7 @@ def test_input_task_and_completed_task_have_no_overlapping_fields():
 
 
 def test_docker_wrapper_template_has_one_set_of_brackets():
-    assert command_template.count("{}") == 1
+    assert container_template.count("{}") == 1
 
 
 def test_parse_task_response():
