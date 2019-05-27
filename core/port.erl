@@ -54,9 +54,9 @@ remove_pipes() ->
 
 connect_to_pipe_and_loop() ->
   case open_port(pipe_name(in), [eof]) of
-    PipeIn when erlang:is_port(PipeIn) ->
+    PipeIn when erlang:is_port(PipeIn) orelse erlang:is_reference(PipeIn) ->
       case open_port(pipe_name(out), [eof]) of
-        PipeOut when erlang:is_port(PipeOut) ->
+        PipeOut when erlang:is_port(PipeOut) orelse erlang:is_reference(PipeOut) ->
           loop(PipeIn, PipeOut);
         Error ->
           Error
