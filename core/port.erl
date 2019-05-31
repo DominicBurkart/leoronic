@@ -53,17 +53,10 @@ remove_pipes() ->
   pipe_cmd("rm").
 
 connect_to_pipe_and_loop() ->
-  case open_port(pipe_name(in), [eof]) of
-    PipeIn when erlang:is_port(PipeIn) orelse erlang:is_reference(PipeIn) ->
-      case open_port(pipe_name(out), [eof]) of
-        PipeOut when erlang:is_port(PipeOut) orelse erlang:is_reference(PipeOut) ->
-          loop(PipeIn, PipeOut);
-        Error ->
-          Error
-      end;
-    Error ->
-      Error
-  end.
+  loop(
+    open_port(pipe_name(in), [eof]),
+    open_port(pipe_name(out), [eof])
+  ).
 
 loop(PipeIn, PipeOut) ->
   receive
@@ -121,18 +114,18 @@ format_task_str(TaskStr) ->
   [ClientId, Await, CPUS, Memory, Storage, Dockerless, Container] =
     string:tokens(TaskStr, ", "), % todo desuck this
   [
-    {client_id}, ClientId,
+    {client_id, ClientId},
     {port_pid, self()},
     {await, list_to_bool(Await)},
-    {cpus, case string:to_float(CPUS) of
-             {error,no_float} -> list_to_integer(CPUS);
-             {F,_Rest} -> F
-           end
+    {cpus,
+      case string:to_float(CPUS) of
+         {error,no_float} -> list_to_integer(CPUS);
+         {F,_Rest} -> F
+      end
     },
     {memory, list_to_integer(Memory)},
     {storage, list_to_integer(Storage)},
-    {dockerless, list_to_bool(Dockerless)},
-    {container, base64:decode(Container)}
+    {dockerless, list_to_bool(Dockerless)}
   ].
 
 
@@ -199,4 +192,4 @@ as_bin(Response) ->
 
 
 head_resp_to_pipe(Pipe, Type, Value) ->
-  spawn(fun() -> Pipe ! as_bin(to_head(Type, Value)) end).
+  spawn(fun () -> Pipe ! as_bin(to_head(Type, Value)) end).
