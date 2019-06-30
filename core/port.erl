@@ -38,9 +38,12 @@ pipe_name(Type) ->
   end.
 
 init() ->
+  io:format("initiating leoronic port...~n"),
   register(leoronic_port, self()),
   process_flag(trap_exit, true),
+  io:format("making pipes...~n"),
   make_pipes(),
+  io:format("connecting to pipes...~n"),
   connect_to_pipe_and_loop().
 
 pipe_cmd(Cmd) when is_list(Cmd) ->
@@ -59,10 +62,13 @@ connect_to_pipe_and_loop() ->
   ).
 
 loop(PipeIn, PipeOut) ->
+  io:format("port awaiting input...~n"),
   receive
-    {PipeIn, {data, Str}} ->
+    {_PipeIn, {data, Str}} ->
+      io:format("received pipe input: "++Str),
       case Str of
         "add task " ++ TaskStr ->
+          io:format("pipe input parsed as new task~n"),
           head_resp_to_pipe(PipeOut, add_task, format_task_str(TaskStr));
         "remove task " ++ TaskId ->
           head_resp_to_pipe(PipeOut, remove_task, TaskId);
@@ -113,7 +119,7 @@ list_to_bool(S) ->
 format_task_str(TaskStr) ->
   [ClientId, Await, CPUS, Memory, Storage, Dockerless, Container] =
     string:tokens(TaskStr, ", "), % todo desuck this
-  [
+  V = [
     {client_id, ClientId},
     {port_pid, self()},
     {await, list_to_bool(Await)},
@@ -126,7 +132,9 @@ format_task_str(TaskStr) ->
     {memory, list_to_integer(Memory)},
     {storage, list_to_integer(Storage)},
     {dockerless, list_to_bool(Dockerless)}
-  ].
+  ],
+  io:format("task string formatted~n"),
+  V.
 
 
 task_to_str(Task) ->
@@ -159,6 +167,7 @@ task_to_str(Task) ->
 
 to_head(Type, Value) ->
   head_pid() ! {self(), Type, Value},
+  io:format("task sent from port to head. Type: "++atom_to_list(Type)++"~n"),
   receive
     Response -> Response
   end.
@@ -192,4 +201,4 @@ as_bin(Response) ->
 
 
 head_resp_to_pipe(Pipe, Type, Value) ->
-  spawn(fun () -> Pipe ! as_bin(to_head(Type, Value)) end).
+  Pipe ! as_bin(to_head(Type, Value)).

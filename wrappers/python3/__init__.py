@@ -5,7 +5,6 @@ import functools
 import os
 import random
 import re
-import subprocess
 from dataclasses import dataclass
 from functools import lru_cache
 from enum import Enum
@@ -70,7 +69,7 @@ class Settings(LeoronicBaseClass):
 class InputTask(LeoronicBaseClass):
     container: str
     _client_id: int = 0  # defined just before the object is piped out
-    wait: bool = False
+    wait: bool = True  # if false, result not automatically piped out of leoronic.
     cpus: int = 1
     memory: int = 500  # in megabytes
     storage: int = 0  # in megabytes

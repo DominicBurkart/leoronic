@@ -10,14 +10,17 @@
 
 %% API
 -import(utils, [select/2, indexed/1, not_in_match_specification/2]).
--export([heads/0, should_be_head/1, head/0, head_pid/0, job_checker_scheduler/2]).
+
+-export([heads/0, should_be_head/0, head/0, head_pid/0, job_checker_scheduler/2, evaluate_worker_responses/5, ask_for_params/1]).
 
 
-heads() -> [{head, Node} || Node <- nodes(), should_be_head(Node)].
+heads() -> [{head, Node} || Node <- nodes(), lists:member(Node, lists:sublist(sorted_nodes(), number_of_heads()))].
 
 
 number_of_heads() ->
-  case length(nodes()) + 1 of
+  case length(nodes()) of
+    0 ->
+      1;
     1 ->
       1;
     N when N >= 2; N < 10 ->
@@ -30,12 +33,18 @@ number_of_heads() ->
 
 
 sorted_nodes() ->
-  lists:sort([node()] ++ nodes()).
+  Sorted = lists:sort(nodes()),
+  case Sorted of
+    [] ->
+      [node()];
+    _ ->
+      Sorted
+  end.
 
 
-should_be_head(Node) when is_atom(Node) ->
+should_be_head() ->
   whereis(leoronic_port) /= undefined orelse
-  lists:member(Node, lists:sublist(sorted_nodes(), number_of_heads())).
+    lists:member(node(), lists:sublist(sorted_nodes(), number_of_heads())).
 
 
 head_processes(Nodes) ->
@@ -49,6 +58,8 @@ head_processes(Nodes) ->
 
 worker_head_tuples() ->
   Nodes = sorted_nodes(),
+  io:format("Nodes from sorted_nodes: ~p ~n", [Nodes]),
+  io:format("Head processes from sorted_nodes: ~p ~n", [head_processes(Nodes)]),
   lists:zip(head_processes(Nodes), Nodes).
 
 
@@ -57,31 +68,42 @@ worker_pids(Head) ->
 
 
 head_pid() ->
-  case should_be_head(node()) of
+  case should_be_head() of
     true ->
+      io:format("this node should be a head: " ++ atom_to_list(node()) ++ "~n"),
       {head, node()};
     false ->
+      io:format("this node is not a head. Finding correct head...~n"),
       element(1, lists:keyfind(node(), 2, worker_head_tuples()))
   end.
 
 
 % todo refactor so that the dockerfile, stdout, stderr, and result all have their own tables.
 head() ->
-  leoronic:add_child_process(
-    head,
-    job_checker_scheduler,
-    [os:system_time(second), os:system_time(second)]
-  ),
+  io:format("adding head ets tables & job_checker_scheduler ~n"),
   ets:new(tasks, [set, named_table]), % ets tables are released when this process terminates.
   ets:new(params, [set, named_table]),
   ets:new(running_tasks, [set, named_table]),
-  spawn(head, ask_for_params, [self()]),
+  io:format("tables added in head, starting children processes... ~n"),
+  Now = os:system_time(second),
+  leoronic:add_child_process(
+    head,
+    job_checker_scheduler,
+    [Now, Now]
+  ),
+  io:format("adding ask for params thread in head...~n"),
+  leoronic:add_child_process(
+    head,
+    ask_for_params,
+    [self()]
+  ),
+  io:format("starting head loop...~n"),
   loop().
 
 
 ask_for_params(ReturnPid) ->
   [FirstOtherNode | _] = [Node || Node <- sorted_nodes(), Node /= node()],
-  case should_be_head(FirstOtherNode) of
+  case lists:member(FirstOtherNode, lists:sublist(sorted_nodes(), number_of_heads())) of
     false ->
       no_other_head;
     true ->
@@ -99,29 +121,24 @@ match_available_to_requested_helper(Available, Requested, FoundMatches) ->
   [BiggestR | RestRequested] = Requested,
   IsMatch = (element(1, SmallestA) > element(1, BiggestR))
     and (element(2, SmallestA) > element(2, BiggestR)),
-  case IsMatch of
+  case IsMatch of % todo this should be a binary search
     true ->
       match_available_to_requested(
         RestAvailable,
         RestRequested,
-        [FoundMatches | {element(3, SmallestA), element(3, BiggestR)}]);
+        [{element(3, SmallestA), element(3, BiggestR)} | FoundMatches]
+      );
     false ->
-      case match_available_to_requested(RestAvailable, Requested, FoundMatches) of
-        FoundMatches -> % no new found matches
-          match_available_to_requested(Available, RestRequested, FoundMatches);
-        WithNewMatches ->
-          WithNewMatches
-      end
+      match_available_to_requested(RestAvailable, Requested, FoundMatches)
   end.
 
 
 match_available_to_requested(Available, Requested, FoundMatches) ->
-% todo this should be a binary search.
   case {Available, Requested} of
     {[], _} ->
-      [];
+      FoundMatches;
     {_, []} ->
-      [];
+      FoundMatches;
     _ ->
       match_available_to_requested_helper(Available, Requested, FoundMatches)
   end.
@@ -178,7 +195,7 @@ get_runnable_tasks() ->
     receive
       {tasks, T} -> T
     end,
-  Evaluator = spawn(node(), head, evaluate_worker_responses, [self(), Tasks]),
+  Evaluator = leoronic:add_child_process(head, evaluate_worker_responses, [self(), Tasks]),
   ask_for_worker_info(Workers, Evaluator),
   receive
     {final, FinalResponse} -> FinalResponse
@@ -236,6 +253,7 @@ make_id() ->
   ).
 
 loop() ->
+  io:format("head waiting for input..."),
   receive
     {ReturnPid, add_task, PartialTask} ->
       Id = make_id(),
@@ -251,9 +269,9 @@ loop() ->
       ] = PartialTask,
       RespondTo =
         case Await of
-                    false -> undefined;
-                    true -> PortPid
-                  end,
+          false -> undefined;
+          true -> PortPid
+        end,
       Task = [
         {has_run, false},
         {respond_to, RespondTo},
@@ -308,30 +326,24 @@ loop() ->
       loop();
 
     {ReturnPid, get_next_tasks} ->
-      RunningTaskIds = [element(1, Task) || Task <- ets:tab2list(running_tasks)],
       UnformattedTaskMatch =
-        ets:select(tasks,
-          [{
-            {'$1',
-              [
-                {has_run, false},
-                {respond_to, '$_'},
-                {created_at, '$_'},
-                {started_at, '$_'},
-                {finished_at, '$_'},
-                {dockerless, '$_'},
-                {memory, '$_'},
-                {storage, '$_'},
-                {cpus, '$_'},
-                {stdout, '$_'},
-                {stderr, '$_'},
-                {result, '$_'},
-                {container, '$_'}
-              ]
-            },
-            [not_in_match_specification('$1', RunningTaskIds)],
-            []
-          }], 5),
+        ets:match_object(
+          tasks,
+          {_, [
+            {has_run, false},
+            {respond_to, '$_'},
+            {created_at, '$_'},
+            {started_at, '$_'},
+            {finished_at, '$_'},
+            {dockerless, '$_'},
+            {memory, '$_'},
+            {storage, '$_'},
+            {cpus, '$_'},
+            {stdout, '$_'},
+            {stderr, '$_'},
+            {result, '$_'},
+            {container, '$_'}
+          ]}, 5),
       ReturnPid !
         case UnformattedTaskMatch of
           '$end_of_table' ->

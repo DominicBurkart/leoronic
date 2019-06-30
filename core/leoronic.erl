@@ -21,35 +21,42 @@ run_container/3
   start/0,
   start_link/0,
   init/1,
+  handle_call/3,
+  handle_cast/2,
+  code_change/3,
   perform_task/1,
   add_child_process/3,
-  housekeeping/2,
-  perform_task/2,
+%%  housekeeping/2,
   stop/1,
-  alert_new_node/0
+  alert_new_node/0,
+  spawn_kid/3,
+  loop_check_should_be_head/0
   ]).
 -record(state, {kids=none}).
 -type state() :: #state{}.
 
 
--dialyzer({nowarn_function, perform_task/1}).
+-dialyzer({nowarn_function, perform_task_internal/1}).
+-dialyzer({nowarn_function, handle_cast/2}).
 
 %%% API
 
 start() ->
+  io:format("leoronic:start is called...~n"),
   gen_server:start(?MODULE, make_state(), []).
 
 start_link() ->
   gen_server:start_link(?MODULE, make_state(), []).
 
 add_child_process(Mod, Fun, Args) ->
-  gen_server:call(self(), {add_child, {Mod, Fun, Args}}).
+  io:format("adding child process with gen_server call...~n"),
+  gen_server:call(?MODULE, {add_child, Mod, Fun, Args}).
 
-housekeeping(Pid, Cmd) ->
-  gen_server:call(Pid, Cmd).
+%%housekeeping(Pid, Cmd) ->
+%%  gen_server:call(Pid, Cmd).
 
-perform_task(Pid, Task) ->
-  gen_server:cast(Pid, {perform_task, Task}).
+perform_task(Task) ->
+  gen_server:cast(?MODULE, {perform_task, Task}).
 
 stop(Pid) ->
   gen_server:call(Pid, stop).
@@ -60,31 +67,31 @@ make_state() ->
   #state { kids=ets:new(kids, [set, public, named_table]) }.
 
 init(State) -> % todo where to declare process_flag(trap_exit, true),
+  io:format("starting leoronic...~n"),
+  register(leoronic, self()),
   spawn_kid(leoronic, alert_new_node, []),
   spawn_kid(port, start, []),
   case check_should_be_head() of
     is_head ->
-      spawn_kid(head, head, []);
+      ok,
+      io:format("head process started.~n");
     not_head ->
+      io:format("node is not head.~n"),
       spawn_kid(leoronic, loop_check_should_be_head, [])
   end,
   {ok, State}.
 
-handle_cast({perform_task, Task}, State) ->
-  CompletedTaskInfo = perform_task(Task),
-  head:head_pid() ! CompletedTaskInfo,
-  % todo is there a better way to do this? sending head might not be receiving head
-  {noreply, State}.
+handle_call({add_child, Mod, Fun, Args}, _From, State) ->
+  io:format("handling add_child...~n"),
+  spawn_kid(Mod, Fun, Args),
+  io:format("Returning ok...~n"),
+  {reply, ok, State};
 
 handle_call(send_system_info, _From, State) ->
   {reply, send_system_info(), State};
 
 handle_call(new_node_initialized, _From, _State) ->
   spawn_kid(leoronic, check_should_be_head, []),
-  {no_reply};
-
-handle_call({add_child, {Mod, Fun, Args}}, _From, _State) ->
-  spawn_kid(Mod, Fun, Args),
   {no_reply};
 
 handle_call(prune_kids, _From, _State) ->
@@ -96,13 +103,18 @@ handle_call(stop, _From, _State) ->
   exit(normal),
   {no_reply}.
 
+handle_cast({perform_task, Task}, State) ->
+  CompletedTaskInfo = perform_task_internal(Task),
+  head:head_pid() ! CompletedTaskInfo,
+  {noreply, State}.
+
 code_change(_, State, _) ->
   {ok, State}.
 
 %%% Internals
 
 
-perform_task(Task) ->
+perform_task_internal(Task) ->
   [{id, TaskId}] = sub([id], Task),
   impute_task_values(
     Task,
@@ -142,19 +154,33 @@ send_system_info() -> % yields memory in MB
 
 
 spawn_kid(Mod, Fun, Args) ->
-  register(Fun, spawn(Mod, Fun, Args)),
-  ets:insert(kids, {Fun}).
+  io:format("spawning kid: " ++ atom_to_list(Mod) ++ " " ++ atom_to_list(Fun) ++ "~n"),
+  case Fun of
+    start ->
+      register(Mod, spawn(Mod, Fun, Args));
+    init ->
+      register(Mod, spawn(Mod, Fun, Args));
+    _ ->
+      register(Fun, spawn(Mod, Fun, Args))
+  end.
+%%  case ets:lookup(kids, Fun) of
+%%    [] ->
+%%      io:format("Function "++atom_to_list(Fun)++" being added to kids table."),
+%%      ets:insert(kids, {Fun});
+%%    _ ->
+%%      io:format("Duplicate version of function "++atom_to_list(Fun)++" running...")
+%%  end.
 
 
 check_should_be_head() ->
-  case head:should_be_head(node()) of
+  case head:should_be_head() of
     true ->
       case whereis(head) of
         undefined ->
-          spawn(node(), head, head, []),
+          spawn_kid(head, head, []),
           is_head;
         _ ->
-          not_head
+          is_head
       end;
     false ->
       not_head
