@@ -18,9 +18,7 @@ heads() -> [{head, Node} || Node <- nodes(), lists:member(Node, lists:sublist(so
 
 
 number_of_heads() ->
-  case length(nodes()) of
-    0 ->
-      1;
+  case length(sorted_nodes()) of
     1 ->
       1;
     N when N >= 2; N < 10 ->
@@ -49,17 +47,16 @@ should_be_head() ->
 
 head_processes(Nodes) ->
   IndexedNodes = indexed(Nodes),
+  io:format("indexed nodes: ~p~n", IndexedNodes),
   NHeads = number_of_heads(),
   HeadIndexForEachNode =
     lists:seq(1, NHeads) ++ % each head node is its own head.
-    [I rem NHeads + 1 || I <- lists:seq(NHeads, length(IndexedNodes))],
+    [I rem NHeads + 1 || I <- lists:seq(NHeads + 1, length(Nodes))], %% non-heads are assigned a head
   [{head, element(2, lists:keyfind(I, 1, IndexedNodes))} || I <- HeadIndexForEachNode].
 
 
 worker_head_tuples() ->
   Nodes = sorted_nodes(),
-  io:format("Nodes from sorted_nodes: ~p ~n", [Nodes]),
-  io:format("Head processes from sorted_nodes: ~p ~n", [head_processes(Nodes)]),
   lists:zip(head_processes(Nodes), Nodes).
 
 
@@ -215,12 +212,19 @@ get_runnable_tasks() ->
 
 
 start_jobs([{Node, Task} | OtherJobs], Acc) ->
+  io:format("start_jobs is running...~n"),
   start_jobs(OtherJobs, [Acc |
     head_pid() ! {spawn(Node, leoronic, perform_task, [Task]), running_task, Task}
   ]).
 
 
+job_checker() ->
+  {job_checker_scheduler, node()} ! {ran},
+  job_checker(-1, -1).
+
+
 job_checker(LastRan, LastIdle) ->
+  io:format("Running job checker...~n"),
   head_pid() ! {self(), prune_running_task_record},
   case {LastRan, LastIdle} of
     {-1, -1} ->
@@ -233,6 +237,7 @@ job_checker(LastRan, LastIdle) ->
       case get_runnable_tasks() of
         undefined -> ok;
         Pairs ->
+          io:format("Jobs being started...~n"),
           start_jobs(Pairs, [])
       end
   end.
@@ -278,7 +283,8 @@ n_next_tasks(N) ->
 
 
 loop() ->
-  io:format("head waiting for input..."),
+  io:format("head waiting for input...~n"),
+  job_checker(),
   receive
     {ReturnPid, add_task, PartialTask} ->
       Id = make_id(),
@@ -314,6 +320,7 @@ loop() ->
       ],
       ets:insert(task_instructions, {Id, Task}),
       ReturnPid ! {new_task_id, ClientId, Id},
+      io:format("Task added to table in head...~n"),
       loop();
 
     {TaskPid, running_task, Task} ->
@@ -373,4 +380,7 @@ loop() ->
     {'EXIT', Pipe, Reason} ->
       os:cmd("rm leoronic.pipe"),
       exit(port_terminated)
+  after
+    30 * 1000 ->
+      loop()
   end.
