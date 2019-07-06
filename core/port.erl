@@ -65,7 +65,7 @@ loop(PipeIn, PipeOut) ->
   io:format("port awaiting input...~n"),
   receive
     {_PipeIn, {data, Str}} ->
-      io:format("received pipe input: "++Str),
+      io:format("received pipe input: " ++ Str),
       case Str of
         "add task " ++ TaskStr ->
           io:format("pipe input parsed as new task~n"),
@@ -125,13 +125,14 @@ format_task_str(TaskStr) ->
     {await, list_to_bool(Await)},
     {cpus,
       case string:to_float(CPUS) of
-         {error,no_float} -> list_to_integer(CPUS);
-         {F,_Rest} -> F
+        {error, no_float} -> list_to_integer(CPUS);
+        {F, _Rest} -> F
       end
     },
     {memory, list_to_integer(Memory)},
     {storage, list_to_integer(Storage)},
-    {dockerless, list_to_bool(Dockerless)}
+    {dockerless, list_to_bool(Dockerless)},
+    {container, Container}
   ],
   io:format("task string formatted~n"),
   V.
@@ -167,7 +168,7 @@ task_to_str(Task) ->
 
 to_head(Type, Value) ->
   head_pid() ! {self(), Type, Value},
-  io:format("task sent from port to head. Type: "++atom_to_list(Type)++"~n"),
+  io:format("task sent from port to head. Type: " ++ atom_to_list(Type) ++ "~n"),
   receive
     Response -> Response
   end.
@@ -181,22 +182,28 @@ bn() ->
 as_bin(Response) ->
   case Response of
     {new_task_id, ClientId, TaskId} ->
-      atom_to_binary(new_task_id, utf8)
-      ++ bs()
-      ++ list_to_binary(ClientId)
-      ++ bs()
-      ++ list_to_binary(TaskId)
-      ++ bn();
+      [
+        atom_to_binary(new_task_id, utf8),
+        bs(),
+        list_to_binary(ClientId),
+        bs(),
+        list_to_binary(integer_to_list(TaskId)),
+        bn()
+      ];
     {task_complete, Task} ->
-      atom_to_binary(task_complete, utf8)
-      ++ bs()
-      ++ list_to_binary(task_to_str(Task))
-      ++ bn();
+      [
+        atom_to_binary(task_complete, utf8),
+        bs(),
+        list_to_binary(task_to_str(Task)),
+        bn()
+      ];
     {task_not_complete, TaskId} ->
-      atom_to_binary(task_not_complete, utf8)
-      ++ bs()
-      ++ list_to_binary(TaskId)
-      ++ bn()
+      [
+        atom_to_binary(task_not_complete, utf8),
+        bs(),
+        list_to_binary(integer_to_list(TaskId)),
+        bn()
+      ]
   end.
 
 

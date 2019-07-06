@@ -81,9 +81,10 @@ head_pid() ->
 % todo refactor so that the dockerfile, stdout, stderr, and result all have their own tables.
 head() ->
   io:format("adding head ets tables & job_checker_scheduler ~n"),
-  ets:new(tasks, [set, named_table]), % ets tables are released when this process terminates.
-  ets:new(params, [set, named_table]),
+  ets:new(task_instructions, [set, named_table]),
   ets:new(running_tasks, [set, named_table]),
+  ets:new(completed_tasks, [set, named_table]),
+  ets:new(params, [set, named_table]),
   io:format("tables added in head, starting children processes... ~n"),
   Now = os:system_time(second),
   leoronic:add_child_process(
@@ -102,13 +103,18 @@ head() ->
 
 
 ask_for_params(ReturnPid) ->
-  [FirstOtherNode | _] = [Node || Node <- sorted_nodes(), Node /= node()],
-  case lists:member(FirstOtherNode, lists:sublist(sorted_nodes(), number_of_heads())) of
-    false ->
-      no_other_head;
-    true ->
-      {head, FirstOtherNode} ! {ReturnPid, get_params, undefined}
+  case [Node || Node <- sorted_nodes(), Node /= node()] of
+    [FirstOtherNode | _] ->
+      case lists:member(FirstOtherNode, lists:sublist(sorted_nodes(), number_of_heads())) of
+        false ->
+          no_other_head;
+        true ->
+          {head, FirstOtherNode} ! {ReturnPid, get_params, undefined}
+      end;
+    [] ->
+      no_other_nodes
   end.
+
 
 
 ask_for_worker_info([Worker | Workers], ReturnPid) ->
@@ -252,6 +258,25 @@ make_id() ->
     [C || C <- pid_to_list(self()), C >= $0 andalso C =< $9]
   ).
 
+n_next_tasks(Found, Last, N) ->
+  case ets:next(task_instructions, Last) of
+    '$end_of_table' ->
+      Found;
+    Key ->
+      Task = ets:lookup(task_instructions, Key),
+      n_next_tasks(Task ++ Found, Key, N - 1)
+  end.
+
+n_next_tasks(N) ->
+  case ets:first(task_instructions) of
+    '$end_of_table' ->
+      [];
+    Key ->
+      Task = ets:lookup(task_instructions, Key),
+      n_next_tasks(Task, Key, N - 1)
+  end.
+
+
 loop() ->
   io:format("head waiting for input..."),
   receive
@@ -287,33 +312,31 @@ loop() ->
         {result, undefined},
         {container, Container}
       ],
-      ets:insert(tasks, {Id, Task}),
+      ets:insert(task_instructions, {Id, Task}),
       ReturnPid ! {new_task_id, ClientId, Id},
       loop();
 
-    {TaskPid, running_task, TaskId} ->
-      ets:insert(running_tasks, {TaskId, TaskPid}),
+    {TaskPid, running_task, Task} ->
+      ets:insert(running_tasks, {select(id, Task),  Task ++ [{pid, TaskPid}]}),
       loop();
 
     {TaskPid, task_complete, Task} ->
       ets:delete(running_tasks, select(id, Task)),
       case select(respond_to, Task) of
         undefined ->
-          ets:insert(tasks, Task);
+          ets:insert(completed_tasks, Task);
         ReturnPid ->
-          ReturnPid ! {task_complete, Task},
-          ets:delete(tasks, select(id, Task))
+          ReturnPid ! {task_complete, Task}
       end,
       loop();
 
     {ReturnPid, retrieve_task, TaskId} ->
-      Task = [{id, TaskId} | ets:lookup(tasks, TaskId)],
-      case select(has_run, Task) of
-        true ->
+      case ets:lookup(completed_tasks, TaskId) of
+        [] ->
+          ReturnPid ! {task_not_complete, TaskId};
+        Task ->
           ReturnPid ! {task_complete, Task},
-          ets:delete(tasks, TaskId);
-        false ->
-          ReturnPid ! {task_not_complete, TaskId}
+          ets:delete(completed_tasks, TaskId)
       end,
       loop();
 
@@ -326,31 +349,7 @@ loop() ->
       loop();
 
     {ReturnPid, get_next_tasks} ->
-      UnformattedTaskMatch =
-        ets:match_object(
-          tasks,
-          {_, [
-            {has_run, false},
-            {respond_to, '$_'},
-            {created_at, '$_'},
-            {started_at, '$_'},
-            {finished_at, '$_'},
-            {dockerless, '$_'},
-            {memory, '$_'},
-            {storage, '$_'},
-            {cpus, '$_'},
-            {stdout, '$_'},
-            {stderr, '$_'},
-            {result, '$_'},
-            {container, '$_'}
-          ]}, 5),
-      ReturnPid !
-        case UnformattedTaskMatch of
-          '$end_of_table' ->
-            {tasks, []};
-          {UnformattedTasks, _Continuation} ->
-            {tasks, [[{id, Id} | Task] || {Id, Task} <- UnformattedTasks]}
-        end,
+      ReturnPid ! {tasks, n_next_tasks(5)},
       loop();
 
     {ReturnPid, prune_running_task_record} ->
