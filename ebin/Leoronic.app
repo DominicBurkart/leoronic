@@ -1,7 +1,7 @@
 {application, leoronic,
   [{description,  "Simple distributed computing."},
  %  {id,           Id},
-   {vsn,          "0.0.05"},
+   {vsn,          "0.0.06"},
    {modules,      [leoronic, head, link_to_leoronic, port, run_container, utils]},
 %%   {maxP,         MaxP},
 %%   {maxT,         MaxT},
