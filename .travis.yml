@@ -24,7 +24,7 @@ matrix:
       script:
         - |
           (
-            erl -sname leoronic -setcookie `cat .leoronic_cookie` -pa core -s leoronic
+            erl -sname leoronic -pa core -s leoronic
           ) & pytest tests/test_integration.py
 
     - name: "python static analysis & styling"
