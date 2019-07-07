@@ -65,6 +65,7 @@ worker_pids(Head) ->
 
 
 head_pid() ->
+  io:format("head_pid called~n"),
   case should_be_head() of
     true ->
       io:format("this node should be a head: " ++ atom_to_list(node()) ++ "~n"),
@@ -192,17 +193,16 @@ evaluate_worker_responses(Responses, Recieved, Total, ReturnPid, Tasks) ->
   end.
 
 get_runnable_tasks() ->
-  head_pid() ! {self(), get_next_tasks},
+  io:format("Getting runnable tasks...~n"),
   Workers = worker_pids(head_pid()),
-  Tasks =
-    receive
-      {tasks, T} -> T
-    end,
+  io:format("Got workers: ~p~n", [Workers]),
+  Tasks =  n_next_tasks(length(sorted_nodes()) * 3), % todo the const int on this line should be exposed as a parameter
+  io:format("Got tasks: ~p~n", [Tasks]),
   Evaluator = leoronic:add_child_process(head, evaluate_worker_responses, [self(), Tasks]),
   ask_for_worker_info(Workers, Evaluator),
   receive
     {final, FinalResponse} -> FinalResponse
-  after 2000 ->
+  after 2 * 1000 ->
     Evaluator ! {eager_eval},
     receive
       {final, Response} -> Response;
@@ -229,13 +229,17 @@ job_checker(LastRan, LastIdle) ->
   case {LastRan, LastIdle} of
     {-1, -1} ->
       {scheduler, node()} ! {self(), get_times},
+      io:format("Requesting job_checker last ran information...~n"),
       receive
         {times, LastRan, LastIdle} -> job_checker(LastRan, LastIdle)
       end;
     _ ->
+      io:format("jobchecker ran with these parameters: LastRan: ~p LastIdle: ~p~n", [LastRan, LastIdle]),
       % todo check for timed-out tasks / idling here
       case get_runnable_tasks() of
-        undefined -> ok;
+        undefined ->
+          io:format("No runnable tasks found~n"),
+          ok;
         Pairs ->
           io:format("Jobs being started...~n"),
           start_jobs(Pairs, [])
@@ -264,19 +268,30 @@ make_id() ->
   ).
 
 n_next_tasks(Found, Last, N) ->
-  case ets:next(task_instructions, Last) of
-    '$end_of_table' ->
+  case N of
+    0 ->
+      io:format("n_next_tasks returning ~p~n", [Found]),
       Found;
-    Key ->
-      Task = ets:lookup(task_instructions, Key),
-      n_next_tasks(Task ++ Found, Key, N - 1)
+    _ ->
+      case ets:next(task_instructions, Last) of
+        '$end_of_table' ->
+          io:format("end of table reached in n_next_tasks, returning ~p~n", [Found]),
+          Found;
+        Key ->
+          Task = ets:lookup(task_instructions, Key),
+          io:format("Found another task in n_next_tasks..."),
+          n_next_tasks(Task ++ Found, Key, N - 1)
+      end
   end.
 
 n_next_tasks(N) ->
+  io:format("getting next ~p tasks.~n", [N]),
   case ets:first(task_instructions) of
     '$end_of_table' ->
+      io:format("no tasks found in task_instructions table.~n"),
       [];
     Key ->
+      io:format("At least one task found in task_instructions.~n"),
       Task = ets:lookup(task_instructions, Key),
       n_next_tasks(Task, Key, N - 1)
   end.
@@ -324,7 +339,7 @@ loop() ->
       loop();
 
     {TaskPid, running_task, Task} ->
-      ets:insert(running_tasks, {select(id, Task),  Task ++ [{pid, TaskPid}]}),
+      ets:insert(running_tasks, {select(id, Task), Task ++ [{pid, TaskPid}]}),
       loop();
 
     {TaskPid, task_complete, Task} ->
@@ -353,10 +368,6 @@ loop() ->
 
     {ReturnPid, update_params, Params} ->
       ets:insert(params, Params),
-      loop();
-
-    {ReturnPid, get_next_tasks} ->
-      ReturnPid ! {tasks, n_next_tasks(5)},
       loop();
 
     {ReturnPid, prune_running_task_record} ->

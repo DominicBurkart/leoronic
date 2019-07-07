@@ -56,6 +56,7 @@ add_child_process(Mod, Fun, Args) ->
 %%  gen_server:call(Pid, Cmd).
 
 perform_task(Task) ->
+  io:format("Sending cast to perform task.~n"),
   gen_server:cast(?MODULE, {perform_task, Task}).
 
 stop(Pid) ->
@@ -104,6 +105,7 @@ handle_call(stop, _From, _State) ->
   {no_reply}.
 
 handle_cast({perform_task, Task}, State) ->
+  io:format("Performing task...~n"),
   CompletedTaskInfo = perform_task_internal(Task),
   head:head_pid() ! CompletedTaskInfo,
   {noreply, State}.
@@ -115,15 +117,14 @@ code_change(_, State, _) ->
 
 
 perform_task_internal(Task) ->
+  io:format("in perform task internal function...~n"),
   [{id, TaskId}] = sub([id], Task),
-  impute_task_values(
-    Task,
-    run_container(
-      select(container, Task),
-      sub([memory, storage, cpus], Task),
-      integer_to_list(TaskId)
-    )
-  ).
+  Ran = run_container(
+    select(container, Task),
+    sub([memory, storage, cpus], Task),
+    integer_to_list(TaskId)
+  ),
+  impute_task_values(Task, Ran).
 
 
 send_system_info() -> % yields memory in MB
