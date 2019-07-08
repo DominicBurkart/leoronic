@@ -7,15 +7,16 @@ def test_apply():
 
 def test_apply_async():
     async_call = apply_async(lambda x: x * x, 5)
-    assert async_call.get() == 25
-    assert async_call.get_stderr() == ""
-    assert async_call.get_stdout() == ""
+    r = async_call.get_record()
+    assert handle_completed(r) == 25
+    assert r.stdout == ""
+    assert r.stderr == ""
 
 
 def test_apply_async_print():
     async_print = apply_async(lambda x: print(x), "value of x printed to stdout")
-    assert async_print.get() == None
     r = async_print.get_record()
+    assert handle_completed(r) == None
     assert r.stderr == ""
     assert r.stdout == "value of x printed to stdout"
 

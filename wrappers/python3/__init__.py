@@ -6,16 +6,15 @@ import os
 import random
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from enum import Enum
 from typing import (
-    cast,
     Set,
     Iterable,
     Dict,
     Callable,
     TypeVar,
     List,
-    Any,
     IO,
     Optional,
     Union,
@@ -24,7 +23,7 @@ from typing import (
 
 import dill  # type: ignore
 
-from .docker_commands import container_template
+from .docker_commands import make_container
 
 ### types
 
@@ -56,11 +55,21 @@ class MessageTypeNotFound(LeoronicError):
     pass
 
 
+class Settings(LeoronicBaseClass):
+    await_unknown_tasks: bool = False
+    read_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_in.pipe")
+    write_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_out.pipe")
+
+    def update(self, new: Dict[str, Union[bool, str]]) -> None:
+        for name, value in new.items():
+            setattr(self, name, value)
+
+
 @dataclass
 class InputTask(LeoronicBaseClass):
     container: str
     _client_id: int = 0  # defined just before the object is piped out
-    wait: bool = False
+    wait: bool = True  # if false, result not automatically piped out of leoronic.
     cpus: int = 1
     memory: int = 500  # in megabytes
     storage: int = 0  # in megabytes
@@ -102,6 +111,7 @@ class CompletedTask(LeoronicBaseClass):
 class AsyncTask(LeoronicBaseClass):
     id: TaskId
 
+    @lru_cache(maxsize=1)
     def get_record(self) -> CompletedTask:
         return get_completed(self.id)
 
@@ -116,32 +126,22 @@ class MessageType(LeoronicBaseClass, Enum):
 
 
 ### fields
-default_pipe_dir: str = os.path.expanduser("~")
-settings = {
-    "await_unknown_tasks": False,
-    # ^ when false, checks if a task was sent to leoronic & fails
-    "pipe_dir": default_pipe_dir,
-}
+settings = Settings()
 running_tasks: Dict[TaskId, "InputTask"] = dict()
 completed_tasks: Dict[TaskId, "CompletedTask"] = dict()
 unclaimed_id_maps: Dict[ClientId, TaskId] = dict()
+# todo use parallel-friendly dicts https://stackoverflow.com/a/38560235
 
 
 ### internal functions
 
 
-def _pipe(pipe_name: str, mode: str) -> IO[str]:
-    path = os.path.join(cast(str, settings["pipe_dir"]), pipe_name)
-    return open(path, mode=mode, encoding="ascii")
-    # actual pipe creation & deletion is handled in erlang.
+def write_pipe() -> IO[str]:
+    return open(settings.write_pipe, mode="w", encoding="ascii")
 
 
-def pipe_write() -> IO[str]:
-    return _pipe("leoronic_in.pipe", "w")
-
-
-def pipe_read() -> IO[str]:
-    return _pipe("leoronic_out.pipe", "r")
+def read_pipe() -> IO[str]:
+    return open(settings.read_pipe, mode="r", encoding="ascii")
 
 
 def _parse_str_to_dict(s: str) -> Dict[str, str]:
@@ -156,6 +156,7 @@ def fields(o: object) -> Iterable[str]:
 
 
 def _str_to_date(s: str) -> datetime.datetime:
+    """only designed to work on classes with type annotations"""
     return datetime.datetime.utcfromtimestamp(int(s))
 
 
@@ -188,7 +189,6 @@ def message_type(message: str) -> MessageType:
 
 
 def store_response(message: str) -> None:
-    # todo verify that this method (storing messages in dictionaries) is parallel-safe
     if message.strip() != "":
         t = message_type(message)
 
@@ -210,10 +210,10 @@ def send_task(task: InputTask) -> TaskId:
     task._client_id = get_next_client_id()
     task_id = None
 
-    with pipe_write() as pipe:
+    with write_pipe() as pipe:
         pipe.write(f"add task {str(task)}")
 
-    with pipe_read() as pipe:
+    with read_pipe() as pipe:
         while task_id is None:
             store_response(pipe.read())
             task_id = unclaimed_id_maps.pop(task._client_id, None)
@@ -223,7 +223,7 @@ def send_task(task: InputTask) -> TaskId:
 
 
 def await_tasks(ids: Set[TaskId]) -> Iterator[CompletedTask]:
-    if settings["await_unknown_tasks"] or any(
+    if settings.await_unknown_tasks or any(
         task_id not in running_tasks and task_id not in completed_tasks
         for task_id in ids
     ):
@@ -233,7 +233,7 @@ def await_tasks(ids: Set[TaskId]) -> Iterator[CompletedTask]:
             if task_id not in running_tasks and task_id not in completed_tasks
         ]
         raise UnknownTaskError(
-            f"Unknown task ids: {bad_ids}. The setting await_unknown_tasks can be"
+            f"Unknown task ids: {bad_ids}. The setting await_unknown_tasks can be "
             f"set to True to allow this API to await unknown leoronic tasks."
         )
 
@@ -242,16 +242,12 @@ def await_tasks(ids: Set[TaskId]) -> Iterator[CompletedTask]:
         yield completed_tasks[task_id]
         collected += 1
 
-    with pipe_read() as pipe:
+    with read_pipe() as pipe:
         while collected < len(ids):
             store_response(pipe.read())
             for task_id in ids.intersection(completed_tasks.keys()):
-                yield completed_tasks[task_id]
+                yield completed_tasks.pop(task_id)
                 collected += 1
-
-
-def make_container(function: Callable[[], Any]) -> str:
-    return container_template.format(base64.b64encode(dill.dumps(function)).decode())
 
 
 def variable_intersection(o1: object, o2: object) -> Set:
@@ -296,21 +292,11 @@ def get_completed(task_id: TaskId) -> CompletedTask:
     return next(await_tasks(set(task_id)))
 
 
+def is_pipe_setting(setting_key: str) -> bool:
+    return setting_key.endswith("_pipe")
+
+
 ### API
-
-
-def apply(fun: Fun, *args, reqs: Optional[Reqs] = None, **kwargs) -> Output:
-    if reqs is None:
-        reqs = dict()
-
-    check_reqs(reqs, ["container", "wait"])
-    task = InputTask(
-        container=make_container(functools.partial(fun, *args, **kwargs)), wait=True
-    )
-    task.update(reqs)
-    id = send_task(task)
-
-    return handle_completed(get_completed(id))
 
 
 def apply_async(fun: Fun, *args, reqs: Optional[Reqs] = None, **kwargs) -> AsyncTask:
@@ -323,6 +309,10 @@ def apply_async(fun: Fun, *args, reqs: Optional[Reqs] = None, **kwargs) -> Async
     task_id = send_task(task)
 
     return AsyncTask(id=task_id)
+
+
+def apply(fun: Fun, *args, reqs: Optional[Reqs] = None, **kwargs) -> Output:
+    return apply_async(fun, *args, reqs, **kwargs).get()
 
 
 def map(
@@ -347,7 +337,8 @@ def imap(
 def imap_unordered(
     fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
 ) -> Iterable[Output]:
-    for completed in await_tasks(set(a.id for a in map_async(fun, iterable, reqs))):
+    task_ids = {a.id for a in map_async(fun, iterable, reqs)}
+    for completed in await_tasks(task_ids):
         yield handle_completed(completed)
 
 

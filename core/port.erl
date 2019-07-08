@@ -38,9 +38,12 @@ pipe_name(Type) ->
   end.
 
 init() ->
+  io:format("initiating leoronic port...~n"),
   register(leoronic_port, self()),
   process_flag(trap_exit, true),
+  io:format("making pipes...~n"),
   make_pipes(),
+  io:format("connecting to pipes...~n"),
   connect_to_pipe_and_loop().
 
 pipe_cmd(Cmd) when is_list(Cmd) ->
@@ -53,23 +56,19 @@ remove_pipes() ->
   pipe_cmd("rm").
 
 connect_to_pipe_and_loop() ->
-  case open_port(pipe_name(in), [eof]) of
-    PipeIn when erlang:is_port(PipeIn) ->
-      case open_port(pipe_name(out), [eof]) of
-        PipeOut when erlang:is_port(PipeOut) ->
-          loop(PipeIn, PipeOut);
-        Error ->
-          Error
-      end;
-    Error ->
-      Error
-  end.
+  loop(
+    open_port(pipe_name(in), [eof]),
+    open_port(pipe_name(out), [eof])
+  ).
 
 loop(PipeIn, PipeOut) ->
+  io:format("port awaiting input...~n"),
   receive
-    {PipeIn, {data, Str}} ->
+    {_PipeIn, {data, Str}} ->
+      io:format("received pipe input: " ++ Str),
       case Str of
         "add task " ++ TaskStr ->
+          io:format("pipe input parsed as new task~n"),
           head_resp_to_pipe(PipeOut, add_task, format_task_str(TaskStr));
         "remove task " ++ TaskId ->
           head_resp_to_pipe(PipeOut, remove_task, TaskId);
@@ -120,20 +119,23 @@ list_to_bool(S) ->
 format_task_str(TaskStr) ->
   [ClientId, Await, CPUS, Memory, Storage, Dockerless, Container] =
     string:tokens(TaskStr, ", "), % todo desuck this
-  [
-    {client_id}, ClientId,
+  V = [
+    {client_id, ClientId},
     {port_pid, self()},
     {await, list_to_bool(Await)},
-    {cpus, case string:to_float(CPUS) of
-             {error,no_float} -> list_to_integer(CPUS);
-             {F,_Rest} -> F
-           end
+    {cpus,
+      case string:to_float(CPUS) of
+        {error, no_float} -> list_to_integer(CPUS);
+        {F, _Rest} -> F
+      end
     },
     {memory, list_to_integer(Memory)},
     {storage, list_to_integer(Storage)},
     {dockerless, list_to_bool(Dockerless)},
-    {container, base64:decode(Container)}
-  ].
+    {container, Container}
+  ],
+  io:format("task string formatted~n"),
+  V.
 
 
 task_to_str(Task) ->
@@ -166,6 +168,7 @@ task_to_str(Task) ->
 
 to_head(Type, Value) ->
   head_pid() ! {self(), Type, Value},
+  io:format("task sent from port to head. Type: " ++ atom_to_list(Type) ++ "~n"),
   receive
     Response -> Response
   end.
@@ -179,24 +182,30 @@ bn() ->
 as_bin(Response) ->
   case Response of
     {new_task_id, ClientId, TaskId} ->
-      atom_to_binary(new_task_id, utf8)
-      ++ bs()
-      ++ list_to_binary(ClientId)
-      ++ bs()
-      ++ list_to_binary(TaskId)
-      ++ bn();
+      [
+        atom_to_binary(new_task_id, utf8),
+        bs(),
+        list_to_binary(ClientId),
+        bs(),
+        list_to_binary(integer_to_list(TaskId)),
+        bn()
+      ];
     {task_complete, Task} ->
-      atom_to_binary(task_complete, utf8)
-      ++ bs()
-      ++ list_to_binary(task_to_str(Task))
-      ++ bn();
+      [
+        atom_to_binary(task_complete, utf8),
+        bs(),
+        list_to_binary(task_to_str(Task)),
+        bn()
+      ];
     {task_not_complete, TaskId} ->
-      atom_to_binary(task_not_complete, utf8)
-      ++ bs()
-      ++ list_to_binary(TaskId)
-      ++ bn()
+      [
+        atom_to_binary(task_not_complete, utf8),
+        bs(),
+        list_to_binary(integer_to_list(TaskId)),
+        bn()
+      ]
   end.
 
 
 head_resp_to_pipe(Pipe, Type, Value) ->
-  spawn(fun() -> Pipe ! as_bin(to_head(Type, Value)) end).
+  Pipe ! as_bin(to_head(Type, Value)).

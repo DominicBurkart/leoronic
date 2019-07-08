@@ -1,4 +1,5 @@
 from .wrappers import (
+    settings,
     apply,
     apply_async,
     map,

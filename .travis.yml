@@ -24,7 +24,7 @@ matrix:
       script:
         - |
           (
-            erl -sname leoronic -setcookie `cat .leoronic_cookie` -pa core -s leoronic
+            erl -sname leoronic -pa core -s leoronic
           ) & pytest tests/test_integration.py
 
     - name: "python static analysis & styling"
@@ -58,3 +58,20 @@ matrix:
         - docker run -d -v /var/run/docker.sock:/var/run/docker.sock dominicburkart/leoronic && pytest --cov=./
       after_success:
         - codecov
+#    - name: "rust linters"
+#      language: rust
+#      rust:
+#        - stable
+#        - beta
+#      before_script:
+#        - rustup component add clippy
+#      script:
+#        - cd wrappers/rust && cargo clippy -- -D warnings
+#
+#    - name: "rust tests"
+#      language: rust
+#      rust:
+#        - stable
+#        - beta
+#      script:
+#        - cd wrappers/rust && cargo test
