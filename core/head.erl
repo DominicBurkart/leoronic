@@ -11,7 +11,7 @@
 %% API
 -import(utils, [select/2, indexed/1, not_in_match_specification/2]).
 
--export([heads/0, should_be_head/0, head/0, head_pid/0, job_checker_scheduler/2, evaluate_worker_responses/5, ask_for_params/1]).
+-export([heads/0, should_be_head/0, head/0, head_pid/0, job_checker_scheduler/2, evaluate_worker_responses/3, evaluate_worker_responses/5, ask_for_params/1]).
 
 
 heads() -> [{head, Node} || Node <- nodes(), lists:member(Node, lists:sublist(sorted_nodes(), number_of_heads()))].
@@ -114,9 +114,12 @@ ask_for_params(ReturnPid) ->
   end.
 
 
+ask_for_worker_info([], _ReturnPid) ->
+  ok;
 
 ask_for_worker_info([Worker | Workers], ReturnPid) ->
-  spawn(Worker, leoronic, send_system_info, [ReturnPid]),
+  io:format("spawning send_system_info on worker ~p~n", [Worker]),
+  spawn(Worker, leoronic, send_system_info, [ReturnPid]), % todo ideally would be in the appropriate kids table.
   ask_for_worker_info(Workers, ReturnPid).
 
 
@@ -178,10 +181,13 @@ best_viable(Responses, Tasks) ->
     Matches -> Matches
   end.
 
+evaluate_worker_responses(ReturnPid, Tasks, NumWorkers) ->
+  evaluate_worker_responses([], 0, NumWorkers, ReturnPid, Tasks).
+
 evaluate_worker_responses(Responses, Recieved, Total, ReturnPid, Tasks) ->
   receive
     {system_info, Response} ->
-      NewResponses = [Responses | Response],
+      NewResponses = [Response | Responses],
       case Recieved + 1 of
         Total ->
           ReturnPid ! {final, best_viable(NewResponses, Tasks)};
@@ -198,7 +204,8 @@ get_runnable_tasks() ->
   io:format("Got workers: ~p~n", [Workers]),
   Tasks =  n_next_tasks(length(sorted_nodes()) * 3), % todo the const int on this line should be exposed as a parameter
   io:format("Got tasks: ~p~n", [Tasks]),
-  Evaluator = leoronic:add_child_process(head, evaluate_worker_responses, [self(), Tasks]),
+  Evaluator = spawn(node(), head, evaluate_worker_responses, [self(), Tasks, length(Workers)]), % todo in kids
+  io:format("Got evaluator pid: ~p~n", [Evaluator]),
   ask_for_worker_info(Workers, Evaluator),
   receive
     {final, FinalResponse} -> FinalResponse
@@ -210,12 +217,13 @@ get_runnable_tasks() ->
     end
   end.
 
+start_jobs([]) ->
+  ok;
 
-start_jobs([{Node, Task} | OtherJobs], Acc) ->
+start_jobs([{Node, Task} | OtherJobs]) ->
   io:format("start_jobs is running...~n"),
-  start_jobs(OtherJobs, [Acc |
-    head_pid() ! {spawn(Node, leoronic, perform_task, [Task]), running_task, Task}
-  ]).
+  head_pid() ! {spawn(Node, leoronic, perform_task, [Task]), running_task, Task},
+  start_jobs(OtherJobs).
 
 
 job_checker() ->
@@ -242,7 +250,7 @@ job_checker(LastRan, LastIdle) ->
           ok;
         Pairs ->
           io:format("Jobs being started...~n"),
-          start_jobs(Pairs, [])
+          start_jobs(Pairs)
       end
   end.
 

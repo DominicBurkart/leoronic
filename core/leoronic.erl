@@ -30,7 +30,9 @@ run_container/3
   stop/1,
   alert_new_node/0,
   spawn_kid/3,
-  loop_check_should_be_head/0
+  loop_check_should_be_head/0,
+  system_info/0,
+  send_system_info/1
   ]).
 -record(state, {kids=none}).
 -type state() :: #state{}.
@@ -54,6 +56,16 @@ add_child_process(Mod, Fun, Args) ->
 
 %%housekeeping(Pid, Cmd) ->
 %%  gen_server:call(Pid, Cmd).
+
+send_system_info(Pid) ->
+  Info = system_info(),
+  io:format("system information collected on worker ~p: ~p~n", [node(), Info]),
+  io:format("sending information to ~p~n", [Pid]),
+  Pid ! Info.
+
+system_info() ->
+  io:format("sending system info..."),
+  gen_server:call(?MODULE, send_system_info).
 
 perform_task(Task) ->
   io:format("Sending cast to perform task.~n"),

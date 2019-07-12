@@ -65,7 +65,7 @@ loop(PipeIn, PipeOut) ->
   io:format("port awaiting input...~n"),
   receive
     {_PipeIn, {data, Str}} ->
-      io:format("received pipe input: " ++ Str),
+      io:format("received pipe input: ~p~n", [Str]),
       case Str of
         "add task " ++ TaskStr ->
           io:format("pipe input parsed as new task~n"),
