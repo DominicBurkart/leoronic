@@ -57,6 +57,7 @@ head_processes(Nodes) ->
 
 worker_head_tuples() ->
   Nodes = sorted_nodes(),
+  io:format("Worker pids returning ~p~n", [lists:zip(head_processes(Nodes), Nodes)]),
   lists:zip(head_processes(Nodes), Nodes).
 
 
@@ -66,14 +67,7 @@ worker_pids(Head) ->
 
 head_pid() ->
   io:format("head_pid called~n"),
-  case should_be_head() of
-    true ->
-      io:format("this node should be a head: " ++ atom_to_list(node()) ++ "~n"),
-      head;
-    false ->
-      io:format("this node is not a head. Finding correct head...~n"),
-      element(1, lists:keyfind(node(), 2, worker_head_tuples()))
-  end.
+  element(1, lists:keyfind(node(), 2, worker_head_tuples())).
 
 
 % todo refactor so that the dockerfile, stdout, stderr, and result all have their own tables.
@@ -152,14 +146,12 @@ match_available_to_requested(Available, Requested, FoundMatches) ->
 
 
 reformat_response(Response) ->
-  {system_info,
-    [
-      {node, N},
-      {total_memory, TM},
-      {free_memory, FM},
-      {cores, Cores}
-    ]
-  } = Response,
+  [
+    {node, N},
+    {total_memory, TM},
+    {free_memory, FM},
+    {cores, Cores}
+  ] = Response,
   Buffer =
     case FM of
       FM when FM >= 4 * 1024 ->
@@ -226,7 +218,7 @@ start_jobs([]) ->
   ok;
 
 start_jobs([{Node, Task} | OtherJobs]) ->
-  io:format("start_jobs is running...~n"),
+  io:format("start_jobs is running with the following input: ~p~n", [{Node, Task} | OtherJobs]),
   head_pid() ! {spawn(Node, leoronic, perform_task, [Task]), running_task, Task},
   start_jobs(OtherJobs).
 
@@ -237,7 +229,10 @@ job_checker() ->
 
 prune_running_task_record() ->
   RunningTasks = ets:tab2list(running_tasks),
-  Infos = [{TaskId, erlang:process_info(Pid, status)} || {TaskId, Pid} <- RunningTasks],
+  Infos = [
+    {TaskId, erlang:process_info(utils:extract(pid, Task), status)} ||
+    {TaskId, Task} <- RunningTasks
+  ],
   BadTaskIds = [
     BadId || {BadId, _} <- lists:filter(
       fun(E) ->
@@ -352,6 +347,7 @@ loop() ->
           true -> PortPid
         end,
       Task = [
+        {id, Id},
         {has_run, false},
         {respond_to, RespondTo},
         {created_at, os:system_time(second)},

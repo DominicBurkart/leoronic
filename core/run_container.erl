@@ -17,11 +17,11 @@
 parse_tags([Tag | RemainingTags]) ->
   FormattedTag =
     case Tag of
-      {memory, M} -> "--memory " ++ integer_to_list(M);
-      {cpus, C} -> "--cpus " ++ float_to_list(C, [{decimals, 2}]);
+      {memory, M} -> "--memory " ++ utils:number_to_list(M);
+      {cpus, C} -> "--cpus " ++ utils:number_to_list(C);
       {storage, S} ->
         "--mount type=tmpfs,destination=/temp,tmpfs-size=" ++
-          integer_to_list(S) ++ "M"
+          utils:number_to_list(S) ++ "M"
     end,
   case RemainingTags of
     [] ->

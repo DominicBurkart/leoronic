@@ -129,7 +129,7 @@ code_change(_, State, _) ->
 
 
 perform_task_internal(Task) ->
-  io:format("in perform task internal function...~n"),
+  io:format("in perform task internal function. Task passed: ~p~n", [Task]),
   [{id, TaskId}] = sub([id], Task),
   Ran = run_container(
     select(container, Task),
