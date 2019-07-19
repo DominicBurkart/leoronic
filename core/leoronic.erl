@@ -150,7 +150,7 @@ send_system_info() -> % yields memory in MB
 
   {
     system_info,
-    {[
+    [
       {node, node()},
       {total_memory, TotalMemory / 1000000},
       {free_memory, CurrentMemory / 1000000},
@@ -162,7 +162,7 @@ send_system_info() -> % yields memory in MB
             Cores
         end
       }
-    ]}
+    ]
   }.
 
 

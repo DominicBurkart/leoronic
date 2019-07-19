@@ -11,7 +11,7 @@
 %% API
 -import(utils, [select/2, indexed/1, not_in_match_specification/2]).
 
--export([heads/0, should_be_head/0, head/0, head_pid/0, job_checker_scheduler/2, evaluate_worker_responses/3, evaluate_worker_responses/5, ask_for_params/1]).
+-export([heads/0, should_be_head/0, head/0, head_pid/0, job_checker/0, job_checker_scheduler/2, evaluate_worker_responses/3, evaluate_worker_responses/5, ask_for_params/1]).
 
 
 heads() -> [{head, Node} || Node <- nodes(), lists:member(Node, lists:sublist(sorted_nodes(), number_of_heads()))].
@@ -69,7 +69,7 @@ head_pid() ->
   case should_be_head() of
     true ->
       io:format("this node should be a head: " ++ atom_to_list(node()) ++ "~n"),
-      {head, node()};
+      head;
     false ->
       io:format("this node is not a head. Finding correct head...~n"),
       element(1, lists:keyfind(node(), 2, worker_head_tuples()))
@@ -173,7 +173,7 @@ best_viable(Responses, Tasks) ->
   Available = [reformat_response(Response) || Response <- Responses],
   Requested = lists:reverse(
     lists:sort(
-      [{select(memory, Task), select(cpus, Task), Task} || Task <- Tasks]
+      [{select(memory, Task), select(cpus, Task), Task} || {_taskId, Task} <- Tasks]
     )
   ), % biggest first
   case match_available_to_requested(Available, Requested, []) of
@@ -184,15 +184,15 @@ best_viable(Responses, Tasks) ->
 evaluate_worker_responses(ReturnPid, Tasks, NumWorkers) ->
   evaluate_worker_responses([], 0, NumWorkers, ReturnPid, Tasks).
 
-evaluate_worker_responses(Responses, Recieved, Total, ReturnPid, Tasks) ->
+evaluate_worker_responses(Responses, Received, Total, ReturnPid, Tasks) ->
   receive
     {system_info, Response} ->
       NewResponses = [Response | Responses],
-      case Recieved + 1 of
+      case Received + 1 of
         Total ->
           ReturnPid ! {final, best_viable(NewResponses, Tasks)};
         _ ->
-          evaluate_worker_responses(NewResponses, Recieved + 1, Total, ReturnPid, Tasks)
+          evaluate_worker_responses(NewResponses, Received + 1, Total, ReturnPid, Tasks)
       end;
     {eager_eval} ->
       ReturnPid ! {eager_eval, best_viable(Responses, Tasks)}
@@ -200,21 +200,26 @@ evaluate_worker_responses(Responses, Recieved, Total, ReturnPid, Tasks) ->
 
 get_runnable_tasks() ->
   io:format("Getting runnable tasks...~n"),
-  Workers = worker_pids(head_pid()),
-  io:format("Got workers: ~p~n", [Workers]),
   Tasks =  n_next_tasks(length(sorted_nodes()) * 3), % todo the const int on this line should be exposed as a parameter
   io:format("Got tasks: ~p~n", [Tasks]),
-  Evaluator = spawn(node(), head, evaluate_worker_responses, [self(), Tasks, length(Workers)]), % todo in kids
-  io:format("Got evaluator pid: ~p~n", [Evaluator]),
-  ask_for_worker_info(Workers, Evaluator),
-  receive
-    {final, FinalResponse} -> FinalResponse
-  after 2 * 1000 ->
-    Evaluator ! {eager_eval},
-    receive
-      {final, Response} -> Response;
-      {eager_eval, Response} -> Response
-    end
+  case Tasks of
+    [] ->
+      undefined;
+    _ ->
+      Workers = worker_pids(head_pid()),
+      io:format("Got workers: ~p~n", [Workers]),
+      Evaluator = spawn(node(), head, evaluate_worker_responses, [self(), Tasks, length(Workers)]), % todo set as child
+      io:format("Got evaluator pid: ~p~n", [Evaluator]),
+      ask_for_worker_info(Workers, Evaluator),
+      receive
+        {final, FinalResponse} -> FinalResponse
+      after 2 * 1000 ->
+        Evaluator ! {eager_eval},
+        receive
+          {final, Response} -> Response;
+          {eager_eval, Response} -> Response
+        end
+      end
   end.
 
 start_jobs([]) ->
@@ -227,19 +232,32 @@ start_jobs([{Node, Task} | OtherJobs]) ->
 
 
 job_checker() ->
-  {job_checker_scheduler, node()} ! {ran},
-  job_checker(-1, -1).
+  job_checker(-1, -1),
+  {job_checker_scheduler, node()} ! {ran}.
 
+prune_running_task_record() ->
+  RunningTasks = ets:tab2list(running_tasks),
+  Infos = [{TaskId, erlang:process_info(Pid, status)} || {TaskId, Pid} <- RunningTasks],
+  BadTaskIds = [
+    BadId || {BadId, _} <- lists:filter(
+      fun(E) ->
+        element(2, E) =:= undefined
+      end,
+      Infos
+    )
+  ],
+  [ets:delete(running_tasks, BadTaskId) || BadTaskId <- BadTaskIds].
 
 job_checker(LastRan, LastIdle) ->
   io:format("Running job checker...~n"),
-  head_pid() ! {self(), prune_running_task_record},
+  prune_running_task_record(),
   case {LastRan, LastIdle} of
     {-1, -1} ->
-      {scheduler, node()} ! {self(), get_times},
-      io:format("Requesting job_checker last ran information...~n"),
+      job_checker_scheduler ! {self(), get_times},
+      io:format("Requesting job_checker last ran information from ~p...~n", [self()]),
       receive
-        {times, LastRan, LastIdle} -> job_checker(LastRan, LastIdle)
+        {times, RealLastRan, RealLastIdle} ->
+          job_checker(RealLastRan, RealLastIdle)
       end;
     _ ->
       io:format("jobchecker ran with these parameters: LastRan: ~p LastIdle: ~p~n", [LastRan, LastIdle]),
@@ -255,17 +273,23 @@ job_checker(LastRan, LastIdle) ->
   end.
 
 
-job_checker_scheduler(LastRan, LastIdle) ->
+job_checker_scheduler(LastRan, LastIdle) -> % todo why do we need the last idle
   receive
     {idle} -> ok; % todo
     {ran} ->
+      io:format("job checker scheduler: received ran confirmation~n"),
       job_checker_scheduler(os:system_time(second), LastIdle);
     {ReturnPid, get_times} ->
+      io:format(
+        "job checker scheduler: run / idle time confirmations requested from ~p. Returning ~p~n",
+        [ReturnPid, {times, LastRan, LastIdle}]
+      ),
       ReturnPid ! {times, LastRan, LastIdle},
       job_checker_scheduler(LastRan, LastIdle)
   after 1000 * 60 * 2 ->
     job_checker(LastRan, LastIdle),
-    job_checker_scheduler(LastRan, LastIdle)
+    Now = os:system_time(second),
+    job_checker_scheduler(Now, LastIdle)
   end.
 
 
@@ -306,10 +330,11 @@ n_next_tasks(N) ->
 
 
 loop() ->
-  io:format("head waiting for input...~n"),
-  job_checker(),
+  io:format("head waiting for input at ~p...~n", [self()]),
+  spawn(head, job_checker, []),
   receive
     {ReturnPid, add_task, PartialTask} ->
+      io:format("Adding task to instructions table...~n"),
       Id = make_id(),
       [
         {client_id, ClientId},
@@ -378,27 +403,12 @@ loop() ->
       ets:insert(params, Params),
       loop();
 
-    {ReturnPid, prune_running_task_record} ->
-      RunningTasks = ets:tab2list(running_tasks),
-      Infos = [{TaskId, erlang:process_info(Pid, status)} || {TaskId, Pid} <- RunningTasks],
-      BadTaskIds = [
-        BadId || {BadId, _} <- lists:filter(
-          fun(E) ->
-            element(2, E) =:= undefined
-          end,
-          Infos
-        )
-      ],
-      [ets:delete(running_tasks, BadTaskId) || BadTaskId <- BadTaskIds],
-      loop();
-
     stop ->
       leoronic:add_child_process(leoronic, loop_check_should_be_head, []),
       ok;
 
     {'EXIT', Pipe, Reason} ->
-      os:cmd("rm leoronic.pipe"),
-      exit(port_terminated)
+      exit(head_terminated)
   after
     30 * 1000 ->
       loop()

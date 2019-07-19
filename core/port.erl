@@ -167,8 +167,9 @@ task_to_str(Task) ->
 
 
 to_head(Type, Value) ->
-  head_pid() ! {self(), Type, Value},
-  io:format("task sent from port to head. Type: " ++ atom_to_list(Type) ++ "~n"),
+  Head = head_pid(),
+  Head ! {self(), Type, Value},
+  io:format("task sent from port to head. Head identity: ~p Type: ~p Value: ~p~n", [Head, Type, Value]),
   receive
     Response -> Response
   end.
@@ -180,6 +181,7 @@ bn() ->
   list_to_binary("\n").
 
 as_bin(Response) ->
+  io:format("in as_bin with response ~p~n", [Response]),
   case Response of
     {new_task_id, ClientId, TaskId} ->
       [
