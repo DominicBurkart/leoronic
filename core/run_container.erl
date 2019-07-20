@@ -9,7 +9,7 @@
 -author("dominic burkart").
 
 %% API
--export([run_container/3]).
+-export([run_container/3, pipe_listener/3]).
 -dialyzer({nowarn_function, [start_pipe/1, run_container/3]}).
 % ^ todo localize this to the open_port calls
 

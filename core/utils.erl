@@ -13,7 +13,6 @@
 -export([
   select/2,
   sub/2,
-  extract/2,
   indexed/1,
   in_match_specification/2,
   not_in_match_specification/2,
@@ -34,12 +33,6 @@ select(Key, L) ->
   element(2, lists:keyfind(Key, 1, L)).
 
 sub(KeyList, L) -> [{K1, V} || {K1, V} <- L, lists:member(K1, KeyList)]. % retains order in L
-
-extract(Key, List) ->
-  case sub([Key], List) of
-    [{_, Value}] -> Value;
-    [] -> key_not_in_list
-  end.
 
 number_to_list(Number) ->
   case is_integer(Number) of

@@ -230,7 +230,7 @@ job_checker() ->
 prune_running_task_record() ->
   RunningTasks = ets:tab2list(running_tasks),
   Infos = [
-    {TaskId, erlang:process_info(utils:extract(pid, Task), status)} ||
+    {TaskId, erlang:process_info(utils:select(pid, Task), status)} ||
     {TaskId, Task} <- RunningTasks
   ],
   BadTaskIds = [
