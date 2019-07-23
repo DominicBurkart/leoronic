@@ -230,18 +230,18 @@ job_checker() ->
 prune_running_task_record() ->
   RunningTasks = ets:tab2list(running_tasks),
   Infos = [
-    {TaskId, erlang:process_info(utils:select(pid, Task), status)} ||
-    {TaskId, Task} <- RunningTasks
+    {Task, erlang:process_info(utils:select(pid, Task), status)} ||
+    {_TaskId, Task} <- RunningTasks
   ],
-  BadTaskIds = [
-    BadId || {BadId, _} <- lists:filter(
+  RanOrErroredTasks = [
+    Task || {Task, _} <- lists:filter(
       fun(E) ->
         element(2, E) =:= undefined
       end,
       Infos
     )
   ],
-  [ets:delete(running_tasks, BadTaskId) || BadTaskId <- BadTaskIds].
+  [head ! {select(id, Task), task_complete, Task} || Task <- RanOrErroredTasks].
 
 job_checker(LastRan, LastIdle) ->
   io:format("Running job checker...~n"),

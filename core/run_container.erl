@@ -17,7 +17,7 @@
 parse_tags([Tag | RemainingTags]) ->
   FormattedTag =
     case Tag of
-      {memory, M} -> "--memory " ++ utils:number_to_list(M);
+      {memory, M} -> "--memory " ++ utils:number_to_list(M) ++"m";
       {cpus, C} -> "--cpus " ++ utils:number_to_list(C);
       {storage, S} ->
         "--mount type=tmpfs,destination=/temp,tmpfs-size=" ++
@@ -32,6 +32,7 @@ parse_tags([Tag | RemainingTags]) ->
 
 
 start_pipe(PipeName) ->
+  io:format("Making pipe ~p~n", [PipeName]),
   os:cmd("mkfifo " ++ PipeName),
   spawn(run_container, pipe_listener, [PipeName, open_port(PipeName, [eof]), []]).
 
@@ -42,14 +43,14 @@ pipe_listener(PipeName, Pipe, CollectedStr) ->
       pipe_listener(PipeName, Pipe, CollectedStr ++ Str);
     {Pid, done} ->
       os:cmd("rm " ++ PipeName),
-      Pid ! {PipeName, CollectedStr}
+      Pid ! {pipe_collected, PipeName, CollectedStr}
   end.
 
 
 collect_listener(Pid) ->
   Pid ! {self(), done},
   receive
-    {PipeName, CollectedStr} ->
+    {pipe_collected, PipeName, CollectedStr} ->
       case string:sub_string(PipeName, 1, 6) of
         "result" -> {result, CollectedStr};
         "stdout" -> {stdout, CollectedStr};
@@ -99,8 +100,12 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   DockerCleanUpCommand =
     "docker image rm -f " ++ ImageName,
   % todo remove the container here, not just the image
+  io:format("Build, run, and cleanup commands : ~p~n~p~n~p~n", [DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand]),
+
+
   CombinedCommand =
     string:join([DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand], "; "),
+  io:format("Running docker command : ~p~n", [CombinedCommand]),
 
   % run commands
   os:cmd(CombinedCommand),
