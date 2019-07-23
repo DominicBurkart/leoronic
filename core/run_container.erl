@@ -80,14 +80,13 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
       [global, {return, list}]
     ),
   DockerBuildCommand =
-    "echo \"" ++
+    "docker build -t -<<EOF" ++
     string:replace(
       Container,
       "LEORONIC_RESULT",
       "result"++TaskIdStr
-    ) ++ "\" | docker build -t " ++
-    ImageName ++
-    " -f- .", % todo these containers shouldn't need build contexts (the ".")
+    ) ++
+    "EOF",
   DockerRunCommand =
     "docker run " ++
     parse_tags(Tags) ++
@@ -106,6 +105,7 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   CombinedCommand =
     string:join([DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand], "; "),
   io:format("Running docker command : ~p~n", [CombinedCommand]),
+  os:cmd("touch docker_command_temp; echo \'~p\' | docker_command_temp"),
 
   % run commands
   os:cmd(CombinedCommand),

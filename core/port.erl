@@ -132,7 +132,7 @@ format_task_str(TaskStr) ->
     {memory, list_to_integer(Memory)},
     {storage, list_to_integer(Storage)},
     {dockerless, list_to_bool(Dockerless)},
-    {container, base64:decode_to_string(Container)}
+    {container, string:replace(base64:decode_to_string(Container), "/n", "~n")}
   ],
   io:format("task string formatted~n"),
   V.
