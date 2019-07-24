@@ -81,7 +81,7 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
     ),
   DockerBuildCommand =
     "docker build -t -<<EOF" ++
-    string:replace(
+    string:replace( % todo base64 in container could include string "EOF"
       Container,
       "LEORONIC_RESULT",
       "result"++TaskIdStr

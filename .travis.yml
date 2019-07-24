@@ -11,38 +11,59 @@ matrix:
         - shellcheck *.sh
 
     - name: "erlang x python integration tests"
-      language: erlang
-      otp_release: 21.3
-      cache: pip
-      before_install:
-        - pyenv install 3.7.0a1
-        - pyenv global 3.7.0a1
+      language: python
+      python: 3.6 # downgraded to avoid xenial
+      cache:
+        pip: true
+        apt: true
+      addons:
+        apt:
+          packages:
+            - erlang
       install:
-        - pip install pytest pytest-cov codecov
+        - pip install dataclasses # necessary because we're in 3.6
         - pip install -r requirements.txt
-        - cd core && erlc +debug *.erl
+        - pip install mypy
       script:
         - |
           (
-            erl -sname leoronic -pa core -s leoronic
-          ) & pytest tests/test_integration.py
+            sleep 15s;
+            timeout 45s pytest tests/test_integration.py
+          ) & (
+            cd core/;
+            erlc *.erl;
+            cd ..;
+            timeout 60s
+              erl -sname leoronic -setcookie `cat .leoronic_cookie` -pa core -s leoronic
+              | grep -q "=ERROR REPORT=" && exit 1
+          )
 
-    - name: "python static analysis & styling"
+    - name: "python static analysis"
       language: python
       dist: xenial
-      python: "3.7"
+      python: 3.7
       cache: pip
       install:
         - pip install -r requirements.txt
-        - pip install black mypy
+        - pip install mypy
       script:
-        - black wrappers/python3
         - mypy wrappers/python3
 
-    - name: "python tests & python x docker integration tests"
+    - name: "python styling"
       language: python
       dist: xenial
-      python: "3.7"
+      python: 3.7
+      cache: pip
+      install:
+        - pip install -r requirements.txt
+        - pip install black
+      script:
+        - black --check wrappers/python3
+
+    - name: "python x docker integration tests & python tests"
+      language: python
+      dist: xenial
+      python: 3.7
       addons:
         apt:
           sources:
@@ -57,7 +78,8 @@ matrix:
       script:
         - docker run -d -v /var/run/docker.sock:/var/run/docker.sock dominicburkart/leoronic && pytest --cov=./
       after_success:
-        - codecov
+        - codecov # run other reports: https://docs.codecov.io/docs/merging-reports
+
 #    - name: "rust linters"
 #      language: rust
 #      rust:
