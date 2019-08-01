@@ -48,13 +48,21 @@ a dev guide is below.
 
 ### Current Dev Goals
 
+#### Completeness
+
+- Handle kwargs in python
+- Create integration tests for task requirement setting
+- Create unit tests for task requirement setting in python
+- add tests for ability to correctly throw custom python errors
+
+#### New Features
+
 - allow commands to be run outside of docker.
+- provide support for Rust and R.
 - allow commands to be passed to a waiting server program, which
   must be defined by the leoronic API for that language, and which
   must have a consistent (as of yet undefined) interface.
 - package leoronic as a standalone binary (without docker).
-- add integration tests.
-- add unit tests for head selection behaviors.
 - provide a GUI for leoronic.
 
 ### Dev Installation

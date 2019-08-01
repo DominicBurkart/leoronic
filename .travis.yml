@@ -23,7 +23,6 @@ matrix:
       install:
         - pip install dataclasses # necessary because we're in 3.6
         - pip install -r requirements.txt
-        - pip install mypy
       script:
         - |
           (
@@ -34,8 +33,7 @@ matrix:
             erlc *.erl;
             cd ..;
             timeout 60s
-              erl -sname leoronic -setcookie `cat .leoronic_cookie` -pa core -s leoronic
-              | grep -q "=ERROR REPORT=" && exit 1
+              erl -sname leoronic -setcookie `cat .leoronic_cookie` -pa core -s leoronic | grep -q "=ERROR REPORT=" && exit 1
           )
 
     - name: "python static analysis"
@@ -72,8 +70,8 @@ matrix:
             - docker
       cache: pip
       install:
-        - pip install pytest pytest-cov codecov
         - pip install -r requirements.txt
+        - pip install pytest pytest-cov codecov
         - docker pull dominicburkart/leoronic
       script:
         - docker run -d -v /var/run/docker.sock:/var/run/docker.sock dominicburkart/leoronic && pytest --cov=./

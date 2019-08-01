@@ -80,11 +80,15 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
       [global, {return, list}]
     ),
   DockerBuildCommand =
-    "docker build -t -<<EOF" ++
+    "docker build -t " ++
+    ImageName ++
+    " -<<EOF
+    " ++
     string:replace( % todo base64 in container could include string "EOF"
       Container,
       "LEORONIC_RESULT",
-      "result"++TaskIdStr
+      "result"++TaskIdStr,
+      all
     ) ++
     "EOF",
   DockerRunCommand =
@@ -99,16 +103,13 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   DockerCleanUpCommand =
     "docker image rm -f " ++ ImageName,
   % todo remove the container here, not just the image
-  io:format("Build, run, and cleanup commands : ~p~n~p~n~p~n", [DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand]),
-
-
-  CombinedCommand =
-    string:join([DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand], "; "),
-  io:format("Running docker command : ~p~n", [CombinedCommand]),
-  os:cmd("touch docker_command_temp; echo \'~p\' | docker_command_temp"),
+  io:format("Build, run, and cleanup commands : ~p~n~n~p~n~n~p~n~n", [DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand])
+  file:write_file("leoronic_out_commands.txt", io_lib:fwrite("~p.\n",, [{DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand}])).
 
   % run commands
-  os:cmd(CombinedCommand),
+  os:cmd(DockerBuildCommand),
+  os:cmd(DockerRunCommand),
+  os:cmd(DockerCleanUpCommand),
 
   % collect results & return with runtime information
   get_completed_values(ListenerPids,
