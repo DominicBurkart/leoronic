@@ -21,10 +21,6 @@ def test_input_task_and_completed_task_have_no_overlapping_fields():
     assert len(variable_intersection(InputTask, CompletedTask)) == 0
 
 
-def test_docker_wrapper_template_has_one_set_of_brackets():
-    assert container_template.count("{}") == 1
-
-
 def test_parse_task_response():
     stdout = "test stdout"
     stderr = "test stderr"

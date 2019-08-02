@@ -49,8 +49,10 @@ pipe_listener(PipeName, Pipe, CollectedStr) ->
 
 collect_listener(Pid) ->
   Pid ! {self(), done},
+  io:format("Awaiting pipe collection from ~p~n", [Pid]),
   receive
     {pipe_collected, PipeName, CollectedStr} ->
+      io:format("Collecting ~p~nValue so far: ~p", [PipeName, CollectedStr]),
       case string:sub_string(PipeName, 1, 6) of
         "result" -> {result, CollectedStr};
         "stdout" -> {stdout, CollectedStr};
@@ -82,8 +84,7 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   DockerBuildCommand =
     "docker build -t " ++
     ImageName ++
-    " -<<EOF
-    " ++
+    " -<<EOF/n" ++
     string:replace( % todo base64 in container could include string "EOF"
       Container,
       "LEORONIC_RESULT",
@@ -103,13 +104,14 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   DockerCleanUpCommand =
     "docker image rm -f " ++ ImageName,
   % todo remove the container here, not just the image
-  io:format("Build, run, and cleanup commands : ~p~n~n~p~n~n~p~n~n", [DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand])
-  file:write_file("leoronic_out_commands.txt", io_lib:fwrite("~p.\n",, [{DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand}])).
+  io:format("Build, run, and cleanup commands : ~p~n~n~p~n~n~p~n~n", [DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand]),
 
   % run commands
   os:cmd(DockerBuildCommand),
   os:cmd(DockerRunCommand),
   os:cmd(DockerCleanUpCommand),
+
+  io:format("Awaiting completed values..."),
 
   % collect results & return with runtime information
   get_completed_values(ListenerPids,
