@@ -55,6 +55,11 @@ def test_parse_task_response():
     )
 
 
+def test_container_template_accepts_one_parameter():
+    assert container_template.count("{") == 1
+    assert container_template.count("}") == 1
+
+
 def test_valid_image():
     def f_int():
         return 5 * 4
