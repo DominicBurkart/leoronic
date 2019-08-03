@@ -23,12 +23,10 @@ result_pipe.close()
 container_template = f"""\
 FROM python:{major}.{minor}
 RUN pip install cloudpickle
-CMD echo '{command_template}' | perl -pe 's/;/\n/g' | python -
+CMD echo '{command_template}' | perl -pe 's/;/\\n/g' | python -
 """
 
 
 def make_container(function: Callable[[], Any]) -> str:
     serialized = base64.b64encode(cloudpickle.dumps(function)).decode()
-    with open("container template.txt", "w") as f:
-        f.write(container_template.format(serialized))
     return container_template.format(serialized)
