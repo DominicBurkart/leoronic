@@ -78,6 +78,13 @@ matrix:
       after_success:
         - codecov # run other reports: https://docs.codecov.io/docs/merging-reports
 
+    - name: "total lines of code"
+      addons:
+        apt:
+          packages:
+            - cloc
+      script:
+        - cloc .
 #    - name: "rust linters"
 #      language: rust
 #      rust:
