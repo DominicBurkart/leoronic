@@ -2,6 +2,8 @@ from ..wrappers.python3 import *
 from ..wrappers.python3.docker_commands import *
 import base64
 import datetime
+import subprocess
+import os
 
 
 def test_fields():
@@ -51,3 +53,29 @@ def test_parse_task_response():
         stderr=stderr,
         result=result,
     )
+
+
+def test_valid_image():
+    def f_int():
+        return 5 * 4
+
+    cases = {
+        f_int,
+        lambda: """
+        test multiple lines
+        """,
+    }
+    for case in cases:
+        container = make_container(case)
+        with open("test_container", "w") as f:
+            f.write(container)
+        assert (
+            subprocess.run(
+                "docker build -t leoronic_test_container -f test_container .",
+                shell=True,
+            ).returncode
+            == 0
+        )
+        subprocess.run("docker image rm leoronic_test_container", shell=True)
+
+    os.remove("test_container")
