@@ -71,7 +71,7 @@ class InputTask(LeoronicBaseClass):
     wait: bool = True  # if false, result not automatically piped out of leoronic.
     cpus: int = 1
     memory: int = 500  # in megabytes
-    storage: int = 0  # in megabytes
+    storage: int = 10  # in megabytes
     dockerless: bool = False
 
     def __str__(self):

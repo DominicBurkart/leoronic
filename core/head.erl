@@ -73,10 +73,10 @@ head_pid() ->
 % todo refactor so that the dockerfile, stdout, stderr, and result all have their own tables.
 head() ->
   io:format("adding head ets tables & job_checker_scheduler ~n"),
-  ets:new(task_instructions, [set, named_table]),
-  ets:new(running_tasks, [set, named_table]),
-  ets:new(completed_tasks, [set, named_table]),
-  ets:new(params, [set, named_table]),
+  ets:new(task_instructions, [set, named_table, public]),
+  ets:new(running_tasks, [set, named_table, public]),
+  ets:new(completed_tasks, [set, named_table, public]),
+  ets:new(params, [set, named_table, public]),
   io:format("tables added in head, starting children processes... ~n"),
   Now = os:system_time(second),
   leoronic:add_child_process(
@@ -219,6 +219,9 @@ start_jobs([]) ->
 
 start_jobs([{Node, Task} | OtherJobs]) ->
   io:format("start_jobs is running with the following input: ~p~n", [{Node, Task} | OtherJobs]),
+  Id = select(id, Task),
+  ets:delete(task_instructions, Id),
+  ets:insert(running_tasks, {Id, Task}),
   head_pid() ! {spawn(Node, leoronic, perform_task, [Task]), running_task, Task},
   start_jobs(OtherJobs).
 
@@ -364,7 +367,7 @@ loop() ->
       ],
       ets:insert(task_instructions, {Id, Task}),
       ReturnPid ! {new_task_id, ClientId, Id},
-      io:format("Task added to table in head...~n"),
+      io:format("Task added to table in head (id: ~p)...~n", [Id]),
       loop();
 
     {TaskPid, running_task, Task} ->
@@ -375,7 +378,7 @@ loop() ->
       ets:delete(running_tasks, select(id, Task)),
       case select(respond_to, Task) of
         undefined ->
-          ets:insert(completed_tasks, Task);
+          ets:insert(completed_tasks, Task); % todo handle if nobody's listening
         ReturnPid ->
           ReturnPid ! {task_complete, Task}
       end,

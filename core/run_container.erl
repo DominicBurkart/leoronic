@@ -72,6 +72,7 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   ListenerPids = [start_pipe(V ++ TaskIdStr) || V <- ["result", "stdout", "stderr"]],
   StartingTime = os:system_time(second),
   ResultPipe = "result"++TaskIdStr,
+  {ok, CurDir} = file:get_cwd(),
 
   % make commands to build image from container & run it
   ImageName =
@@ -97,8 +98,8 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
     "docker run " ++
     parse_tags(Tags) ++
     " -v " ++
-    ResultPipe ++ % the program needs to be able to write to the result pipe.
-    ":" ++
+    filename:join(CurDir, ResultPipe) ++ % the program needs to be able to write to the result pipe.
+    ":/" ++
     ResultPipe ++
     " " ++
     ImageName ++
@@ -113,7 +114,8 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   DockerFullCommand = lists:flatten([DockerBuildCommand, "\n", DockerRunCommand, "\n", DockerCleanUpCommand]),
   io:format("Full command : ~p~n", [DockerFullCommand]),
 
-  io:format("Awaiting completed values..."),
+  io:format("Launching command...~n"),
+  os:cmd(DockerFullCommand),
 
   % collect results & return with runtime information
   get_completed_values(ListenerPids,
