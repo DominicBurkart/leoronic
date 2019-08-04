@@ -23,7 +23,7 @@ result_pipe.close()
 container_template = f"""\
 FROM python:{major}.{minor}
 RUN pip install cloudpickle
-CMD echo '{command_template}' | perl -pe 's/;/\\n/g' | python -
+CMD echo '{command_template}' | perl -pe 's/;/\\n/g' | python3 -
 """
 
 

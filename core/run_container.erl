@@ -71,6 +71,7 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   % open pipes
   ListenerPids = [start_pipe(V ++ TaskIdStr) || V <- ["result", "stdout", "stderr"]],
   StartingTime = os:system_time(second),
+  ResultPipe = "result"++TaskIdStr,
 
   % make commands to build image from container & run it
   ImageName =
@@ -84,7 +85,7 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   DockerBuildCommand =
     "docker build -t " ++
     ImageName ++
-    " -<<EOF/n" ++
+    " -<<EOF\n" ++
     string:replace( % todo base64 in container could include string "EOF"
       Container,
       "LEORONIC_RESULT",
@@ -95,6 +96,10 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   DockerRunCommand =
     "docker run " ++
     parse_tags(Tags) ++
+    " -v " ++
+    ResultPipe ++ % the program needs to be able to write to the result pipe.
+    ":" ++
+    ResultPipe ++
     " " ++
     ImageName ++
     " 1> stdout" ++
@@ -103,13 +108,10 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
     TaskIdStr,
   DockerCleanUpCommand =
     "docker image rm -f " ++ ImageName,
-  % todo remove the container here, not just the image
-  io:format("Build, run, and cleanup commands : ~p~n~n~p~n~n~p~n~n", [DockerBuildCommand, DockerRunCommand, DockerCleanUpCommand]),
 
   % run commands
-  os:cmd(DockerBuildCommand),
-  os:cmd(DockerRunCommand),
-  os:cmd(DockerCleanUpCommand),
+  DockerFullCommand = lists:flatten([DockerBuildCommand, "\n", DockerRunCommand, "\n", DockerCleanUpCommand]),
+  io:format("Full command : ~p~n", [DockerFullCommand]),
 
   io:format("Awaiting completed values..."),
 

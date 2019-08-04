@@ -67,7 +67,7 @@ def test_valid_image():
     cases = {
         f_int,
         lambda: """
-        test multiple lines
+        has multiple lines
         """,
     }
     for case in cases:
