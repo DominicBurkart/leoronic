@@ -15,13 +15,14 @@ Simple distributed computing.
 
 ### note: leoronic is still in development and is not ready for use.
 
-Leoronic is a distributed computing library. It is designed to be simple
-to use, providing the same interface as Python's multiprocessing
-library and requiring minimal setup. It automatically handles the loss
-or addition of new nodes to your cluster, allowing you to scale without
-stopping your application or modifying your code. Leoronic is powered
-by the Open Telecom Platform and Docker, and maintains a complete set
-of integration tests.
+Leoronic is a distributed computing library. Acting as a thin (~1500 lines)
+layer over OTP and Docker, it provides the same interface as Python's
+multiprocessing library and requires minimal setup. Leoronic
+automatically handles the loss or addition of new nodes to your
+cluster, allowing you to increase throughput or handle hardware
+failure on the fly, without stopping your applicaton
+or modifying your code. Leoronic maintains a complete set of
+integration tests and is being actively maintained and extended.
 
 ### Installation
 
