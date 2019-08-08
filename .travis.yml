@@ -14,18 +14,18 @@ matrix:
         - shellcheck *.sh
 
     - name: "erlang x python integration tests & python tests"
-      language: python
-      python: 3.6 # downgraded to avoid xenial
+      language: erlang
+      otp_release: 22.0
       cache:
         pip: true
         apt: true
-      addons:
-        apt:
-          packages:
-            - erlang
+      before_install:
+        - sudo add-apt-repository -y ppa:deadsnakes/ppa
+        - sudo apt-get update
+        - sudo apt install python3.7
+        - curl https://bootstrap.pypa.io/get-pip.py | sudo python3.7
       install:
-        - pip install dataclasses # necessary because we're in 3.6
-        - pip install -r requirements.txt
+        - sudo pip3 install -r requirements.txt
       script:
         - ( pytest ) & ( bash compile_and_run.sh )
 
