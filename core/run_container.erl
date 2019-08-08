@@ -30,11 +30,14 @@ parse_tags([Tag | RemainingTags]) ->
       FormattedTag ++ " " ++ parse_tags(RemainingTags)
   end.
 
-
 start_pipe(PipeName) ->
   io:format("Making pipe ~p~n", [PipeName]),
   os:cmd("mkfifo " ++ PipeName),
-  spawn(run_container, pipe_listener, [PipeName, open_port(PipeName, [eof]), []]).
+  spawn(
+    run_container,
+    pipe_listener,
+    [PipeName, open_port(PipeName, [eof]), []]
+  ).
 
 
 pipe_listener(PipeName, Pipe, CollectedStr) ->
