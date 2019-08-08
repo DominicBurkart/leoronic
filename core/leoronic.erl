@@ -142,7 +142,9 @@ perform_task_internal(Task) ->
 send_system_info() -> % yields memory in MB
   application:start(sasl),
   application:start(os_mon),
-  [{_, TotalMemory}, {_, CurrentMemory}, {_, _}] = memsup:get_system_memory_data(),
+  MemoryData = memsup:get_system_memory_data(),
+  TotalMemory = utils:select(total_memory, MemoryData),
+  CurrentMemory = utils:select(free_memory, MemoryData),
   application:stop(os_mon),
   application:stop(sasl),
 
