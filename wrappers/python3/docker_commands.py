@@ -22,7 +22,6 @@ result_pipe.close()
 container_template = f"""\
 FROM python:{major}.{minor}
 RUN pip install cloudpickle
-RUN echo "garbage" >> LEORONIC_RESULT
 CMD echo '{command_template}' | perl -pe 's/;/\\n/g' | python3 -
 """
 
