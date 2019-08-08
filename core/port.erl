@@ -19,7 +19,7 @@
 utils,
 [root_directory/0]
 ).
--export([start/0, stop/0, init/0]).
+-export([start/0, stop/0, init/0, list_to_bool/1]).
 -dialyzer({nowarn_function, [connect_to_pipe_and_loop/0, init/0]}).
 % todo constrain this to the call to open_port (dialyzer can't handle it).
 
