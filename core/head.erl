@@ -78,7 +78,7 @@ head() ->
   ets:new(completed_tasks, [set, named_table, public]),
   ets:new(params, [set, named_table, public]),
   io:format("tables added in head, starting children processes... ~n"),
-  Now = os:system_time(second),
+  Now = os:system_time(1),
   leoronic:add_child_process(
     head,
     job_checker_scheduler,
@@ -276,7 +276,7 @@ job_checker_scheduler(LastRan, LastIdle) -> % todo why do we need the last idle
     {idle} -> ok; % todo
     {ran} ->
       io:format("job checker scheduler: received ran confirmation~n"),
-      job_checker_scheduler(os:system_time(second), LastIdle);
+      job_checker_scheduler(os:system_time(1), LastIdle);
     {ReturnPid, get_times} ->
       io:format(
         "job checker scheduler: run / idle time confirmations requested from ~p. Returning ~p~n",
@@ -286,14 +286,14 @@ job_checker_scheduler(LastRan, LastIdle) -> % todo why do we need the last idle
       job_checker_scheduler(LastRan, LastIdle)
   after 1000 * 60 * 2 ->
     job_checker(LastRan, LastIdle),
-    Now = os:system_time(second),
+    Now = os:system_time(1),
     job_checker_scheduler(Now, LastIdle)
   end.
 
 
 make_id() ->
   list_to_integer(
-    integer_to_list(os:system_time(second)) ++
+    integer_to_list(os:system_time(1)) ++
     [C || C <- pid_to_list(self()), C >= $0 andalso C =< $9]
   ).
 
@@ -353,7 +353,7 @@ loop() ->
         {id, Id},
         {has_run, false},
         {respond_to, RespondTo},
-        {created_at, os:system_time(second)},
+        {created_at, os:system_time(1)},
         {started_at, undefined},
         {finished_at, undefined},
         {dockerless, Dockerless},

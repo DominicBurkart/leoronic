@@ -73,7 +73,7 @@ get_completed_values(ListenerPids, AdditionalValues) ->
 run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   % open pipes
   ListenerPids = [start_pipe(V ++ TaskIdStr) || V <- ["result", "stdout", "stderr"]],
-  StartingTime = os:system_time(second),
+  StartingTime = os:system_time(1),
   ResultPipe = "result"++TaskIdStr,
   {ok, CurDir} = file:get_cwd(),
 
@@ -122,4 +122,4 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
 
   % collect results & return with runtime information
   get_completed_values(ListenerPids,
-    [{started_at, StartingTime}, {ended_at, os:system_time(second)}]).
+    [{started_at, StartingTime}, {ended_at, os:system_time(1)}]).
