@@ -13,7 +13,7 @@ matrix:
       script:
         - shellcheck *.sh
 
-    - name: "erlang x python integration tests"
+    - name: "erlang x python integration tests & python tests"
       language: python
       python: 3.6 # downgraded to avoid xenial
       cache:
@@ -27,17 +27,7 @@ matrix:
         - pip install dataclasses # necessary because we're in 3.6
         - pip install -r requirements.txt
       script:
-        - |
-          (
-            sleep 15s;
-            timeout 45s pytest tests/test_integration.py
-          ) & (
-            cd core/;
-            erlc *.erl;
-            cd ..;
-            timeout 60s
-              erl -sname leoronic -setcookie `cat .leoronic_cookie` -pa core -s leoronic | grep -q "=ERROR REPORT=" && exit 1
-          )
+        - ( pytest ) & ( bash compile_and_run.sh )
 
     - name: "python static analysis"
       language: python
