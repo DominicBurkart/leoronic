@@ -27,7 +27,9 @@ matrix:
       install:
         - sudo pip3 install -r requirements.txt
       script:
-        - ( pytest ) & ( bash compile_and_run.sh )
+        - ( pytest ) & ( timeout --preserve-status 240 eval bash compile_and_run.sh )
+      after_success:
+        - codecov
 
     - name: "python static analysis"
       language: python
@@ -51,25 +53,25 @@ matrix:
       script:
         - black --check wrappers/python3
 
-    - name: "python x docker integration tests & python tests"
-      language: python
-      dist: xenial
-      python: 3.7
-      addons:
-        apt:
-          sources:
-            - docker-xenial
-          packages:
-            - docker
-      cache: pip
-      install:
-        - pip install -r requirements.txt
-        - pip install pytest pytest-cov codecov
-        - docker pull dominicburkart/leoronic
-      script:
-        - docker run -d -v /var/run/docker.sock:/var/run/docker.sock dominicburkart/leoronic && pytest --cov=./
-      after_success:
-        - codecov # run other reports: https://docs.codecov.io/docs/merging-reports
+    # - name: "python x docker integration tests & python tests"
+    #   language: python
+    #   dist: xenial
+    #   python: 3.7
+    #   addons:
+    #     apt:
+    #       sources:
+    #         - docker-xenial
+    #       packages:
+    #         - docker
+    #   cache: pip
+    #   install:
+    #     - pip install -r requirements.txt
+    #     - pip install pytest pytest-cov codecov
+    #     - docker pull dominicburkart/leoronic
+    #   script:
+    #     - docker run -d -v /var/run/docker.sock:/var/run/docker.sock dominicburkart/leoronic && pytest --cov=./
+    #   after_success:
+    #     - codecov # run other reports: https://docs.codecov.io/docs/merging-reports
 
     - name: "total lines of code"
       addons:
