@@ -1,5 +1,5 @@
 from ..wrappers.python3 import *
-from ..wrappers.python3.docker_commands import *
+from ..wrappers.python3.worker_commands import *
 import base64
 import datetime
 import subprocess
@@ -55,32 +55,6 @@ def test_parse_task_response():
     )
 
 
-def test_container_template_accepts_one_parameter():
-    assert container_template.count("{") == 1
-    assert container_template.count("}") == 1
-
-
-def test_make_container_produces_image():
-    def f_int():
-        return 5 * 4
-
-    cases = {
-        f_int,
-        lambda: """
-        has multiple lines
-        """,
-    }
-    for case in cases:
-        container = make_container(case)
-        with open("test_container", "w") as f:
-            f.write(container)
-        assert (
-            subprocess.run(
-                "docker build -t leoronic_test_container -f test_container .",
-                shell=True,
-            ).returncode
-            == 0
-        )
-        subprocess.run("docker image rm leoronic_test_container", shell=True)
-
-    os.remove("test_container")
+def test_command_template_accepts_one_parameter():
+    assert command_template.count("{") == 1
+    assert command_template.count("}") == 1

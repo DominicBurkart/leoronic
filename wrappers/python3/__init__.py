@@ -22,7 +22,7 @@ from typing import (
     Iterator,
 )
 
-from .docker_commands import make_container
+from .worker_commands import make_command
 
 ### types
 
@@ -310,7 +310,7 @@ def reset_requirements():  # todo untested
 
 def apply_async(fun: Fun, *args) -> AsyncTask:
     check_reqs(task_requirements, ["container"])
-    task = InputTask(container=make_container(functools.partial(fun, *args)))
+    task = InputTask(container=make_command(functools.partial(fun, *args)))
     task.update(task_requirements)
     task_id = send_task(task)
 
