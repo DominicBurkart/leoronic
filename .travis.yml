@@ -27,9 +27,27 @@ matrix:
       install:
         - sudo pip3 install -r requirements.txt
       script:
-        - ( pytest ) & ( timeout --preserve-status 240 eval bash compile_and_run.sh )
+        - |
+          ( sleep 20 && pytest tests/test_integration.py ) &
+          ( timeout --preserve-status 240 eval bash compile_and_run.sh )
       after_success:
         - codecov
+
+    - name: "python unit tests"
+      language: python
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - docker-xenial
+          packages:
+            - docker
+      python: 3.7
+      cache: pip
+      install:
+        - pip install -r requirements.txt
+      script:
+        - pytest tests/test_api.py
 
     - name: "python static analysis"
       language: python
