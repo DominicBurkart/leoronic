@@ -29,7 +29,7 @@ matrix:
       script:
         - |
           ( sleep 20 && pytest tests/test_integration.py ) &
-          ( timeout --preserve-status 240 eval bash compile_and_run.sh )
+          ( timeout --preserve-status 240 bash compile_and_run.sh )
       after_success:
         - codecov
 
