@@ -9,7 +9,7 @@
 -author("dominic burkart").
 
 %% API
--export([run_container/3, pipe_listener/3]).
+-export([run_container/3, start_pipe/1]).
 -dialyzer({nowarn_function, [start_pipe/1, run_container/3]}).
 % ^ todo localize this to the open_port calls
 
@@ -33,25 +33,24 @@ parse_tags([Tag | RemainingTags]) ->
 start_pipe(PipeName) ->
   io:format("Making pipe ~p~n", [PipeName]),
   os:cmd("mkfifo " ++ PipeName),
-  spawn(
-    run_container,
-    pipe_listener,
-    [PipeName, open_port(PipeName, [eof]), []]
-  ).
+  pipe_listener(PipeName, open_port(PipeName, [eof]), "").
 
 
 pipe_listener(PipeName, Pipe, CollectedStr) ->
+  io:format("~p is listening at ~p~n", [PipeName, Pipe]),
   receive
     {Pipe, {data, Str}} ->
+      io:format("Pipe received data! ~p~n", [Str]),
       pipe_listener(PipeName, Pipe, CollectedStr ++ Str);
-    {Pid, done} ->
+    {Pid, rm_pipe} ->
+      io:format("pipe listener received rm_pipe request...~n"),
       os:cmd("rm " ++ PipeName),
       Pid ! {pipe_collected, PipeName, CollectedStr}
   end.
 
 
 collect_listener(Pid) ->
-  Pid ! {self(), done},
+  Pid ! {self(), rm_pipe},
   io:format("Awaiting pipe collection from ~p~n", [Pid]),
   receive
     {pipe_collected, PipeName, CollectedStr} ->
@@ -72,7 +71,7 @@ get_completed_values(ListenerPids, AdditionalValues) ->
 
 run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   % open pipes
-  ListenerPids = [start_pipe(V ++ TaskIdStr) || V <- ["result", "stdout", "stderr"]],
+  ListenerPids = [spawn(run_container, start_pipe, [V ++ TaskIdStr]) || V <- ["result", "stdout", "stderr"]],
   StartingTime = os:system_time(1),
   ResultPipe = "result"++TaskIdStr,
   {ok, CurDir} = file:get_cwd(),
@@ -118,7 +117,8 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   io:format("Full command : ~p~n", [DockerFullCommand]),
 
   io:format("Launching command...~n"),
-  os:cmd(DockerFullCommand),
+  Output = os:cmd(DockerFullCommand),
+  io:format("Command ran. Output: ~p~n", [Output]),
 
   % collect results & return with runtime information
   get_completed_values(ListenerPids,
