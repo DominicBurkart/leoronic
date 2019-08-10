@@ -54,7 +54,7 @@ collect_listener(Pid) ->
   io:format("Awaiting pipe collection from ~p~n", [Pid]),
   receive
     {pipe_collected, PipeName, CollectedStr} ->
-      io:format("Collecting ~p~nValue so far: ~p", [PipeName, CollectedStr]),
+      io:format("Collecting ~p~nValue: ~p", [PipeName, CollectedStr]),
       case string:sub_string(PipeName, 1, 6) of
         "result" -> {result, CollectedStr};
         "stdout" -> {stdout, CollectedStr};
@@ -77,40 +77,38 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
   {ok, CurDir} = file:get_cwd(),
 
   % make commands to build image from container & run it
-  ImageName =
-    "leoronic_container_" ++
-    re:replace(
-      pid_to_list(self()),
-      "[^0-9]",
-      "",
-      [global, {return, list}]
-    ),
-  DockerBuildCommand =
-    "docker build -t " ++
-    ImageName ++
-    " -<<EOF\n" ++
+  ImageName = "",
+  DockerBuildCommand = "",
+%%    "docker build -t " ++
+%%    ImageName ++
+%%    " -<<EOF\n" ++
+%%    string:replace( % todo base64 in container could include string "EOF"
+%%      Container,
+%%      "LEORONIC_RESULT",
+%%      "result"++TaskIdStr,
+%%      all
+%%    ) ++
+%%    "EOF",
+  DockerRunCommand =
+%%    "docker run " ++
+%%    parse_tags(Tags) ++
+%%    " -v " ++
+%%    filename:join(CurDir, ResultPipe) ++ % the program needs to be able to write to the result pipe.
+%%    ":/" ++
+%%    ResultPipe ++
+%%    " " ++
     string:replace( % todo base64 in container could include string "EOF"
       Container,
       "LEORONIC_RESULT",
       "result"++TaskIdStr,
       all
     ) ++
-    "EOF",
-  DockerRunCommand =
-    "docker run " ++
-    parse_tags(Tags) ++
-    " -v " ++
-    filename:join(CurDir, ResultPipe) ++ % the program needs to be able to write to the result pipe.
-    ":/" ++
-    ResultPipe ++
-    " " ++
-    ImageName ++
     " 1> stdout" ++
     TaskIdStr ++
     " 2> stderr" ++
     TaskIdStr,
-  DockerCleanUpCommand =
-    "docker image rm -f " ++ ImageName,
+  DockerCleanUpCommand = "",
+%%    "docker image rm -f " ++ ImageName,
 
   % run commands
   DockerFullCommand = lists:flatten([DockerBuildCommand, "\n", DockerRunCommand, "\n", DockerCleanUpCommand]),
@@ -122,4 +120,4 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
 
   % collect results & return with runtime information
   get_completed_values(ListenerPids,
-    [{started_at, StartingTime}, {ended_at, os:system_time(1)}]).
+    [{started_at, StartingTime}, {finished_at, os:system_time(1)}]).

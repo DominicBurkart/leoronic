@@ -9,7 +9,7 @@ command_template = """\
 import cloudpickle
 import base64
 f = cloudpickle.loads(base64.b64decode("{}".encode()))
-result_pipe = open("/LEORONIC_RESULT", "w")
+result_pipe = open("LEORONIC_RESULT", "w")
 try:
     result_pipe.write("r" + base64.b64encode(cloudpickle.dumps(f())).decode())
 except Exception as e:

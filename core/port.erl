@@ -141,7 +141,7 @@ format_task_str(TaskStr) ->
 task_to_str(Task) ->
   [
     {id, ID},
-    {has_run, _},
+    {has_run, _has_run},
     {respond_to, _},
     {created_at, CreatedAt},
     {started_at, StartedAt},
@@ -171,7 +171,9 @@ to_head(Type, Value) ->
   Head ! {self(), Type, Value},
   io:format("task sent from port to head. Head identity: ~p Type: ~p Value: ~p~n", [Head, Type, Value]),
   receive
-    Response -> Response
+    Response ->
+      io:format("received response: ~p~n", [Response]),
+      Response
   end.
 
 bs() ->
@@ -210,4 +212,4 @@ as_bin(Response) ->
 
 
 head_resp_to_pipe(Pipe, Type, Value) ->
-  Pipe ! as_bin(to_head(Type, Value)).
+  port_command(Pipe, as_bin(to_head(Type, Value))).

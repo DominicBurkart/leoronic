@@ -336,7 +336,7 @@ loop() ->
       Id = make_id(),
       [
         {client_id, ClientId},
-        {port_pid, PortPid},
+        {port_pid, _PortPid},
         {await, Await},
         {cpus, CPUS},
         {memory, Memory},
@@ -347,7 +347,7 @@ loop() ->
       RespondTo =
         case Await of
           false -> undefined;
-          true -> PortPid
+          true -> ReturnPid
         end,
       Task = [
         {id, Id},
@@ -375,12 +375,15 @@ loop() ->
       loop();
 
     {TaskPid, task_complete, Task} ->
+      io:format("received task completion notice in head~n"),
       ets:delete(running_tasks, select(id, Task)),
       case select(respond_to, Task) of
         undefined ->
-          ets:insert(completed_tasks, Task); % todo handle if nobody's listening
+          io:format("Respond to is undefined, adding to the completed tasks table."),
+          ets:insert(completed_tasks, lists:keydelete(pid, 1, Task)); % todo handle if nobody's listening
         ReturnPid ->
-          ReturnPid ! {task_complete, Task}
+          io:format("sending the completed task to the listed pid"),
+          ReturnPid ! {task_complete, lists:keydelete(pid, 1, Task)}
       end,
       loop();
 

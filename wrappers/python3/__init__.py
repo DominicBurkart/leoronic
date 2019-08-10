@@ -56,8 +56,8 @@ class MessageTypeNotFound(LeoronicError):
 
 class Settings(LeoronicBaseClass):
     await_unknown_tasks: bool = False
-    read_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_in.pipe")
-    write_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_out.pipe")
+    read_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_out.pipe")
+    write_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_in.pipe")
 
     def update(self, new: Dict[str, Union[bool, str]]) -> None:
         for name, value in new.items():
@@ -72,7 +72,7 @@ class InputTask(LeoronicBaseClass):
     cpus: int = 1
     memory: int = 500  # in megabytes
     storage: int = 10  # in megabytes
-    dockerless: bool = False
+    dockerless: bool = True
 
     def __str__(self):
         return ", ".join(
@@ -189,6 +189,7 @@ def message_type(message: str) -> MessageType:
 
 
 def store_response(message: str) -> None:
+    message = message[:-1]  # always ends in newline
     if message.strip() != "":
         t = message_type(message)
 
@@ -280,7 +281,7 @@ def check_reqs(reqs: Reqs, bad_fields: Iterable[str]) -> None:
 
 
 def handle_completed(task: CompletedTask):
-    result = pickle.loads(base64.b64decode(task.result[1:]))
+    result = pickle.loads(base64.b64decode(task.result[1:-1]))
     if task.result[0] == "e":  # error response
         raise result
     return result
