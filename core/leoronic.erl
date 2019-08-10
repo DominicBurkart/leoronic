@@ -138,7 +138,9 @@ perform_task_internal(Task) ->
     integer_to_list(TaskId)
   ),
   io:format("ran: ~p~n", [Ran]),
-  impute_task_values(Task, Ran).
+  Imputed = impute_task_values(Task, Ran),
+  io:format("imputed values: ~p~n", [Imputed]),
+  Imputed.
 
 
 send_system_info() -> % yields memory in MB

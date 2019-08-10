@@ -57,8 +57,8 @@ remove_pipes() ->
 
 connect_to_pipe_and_loop() ->
   loop(
-    open_port(pipe_name(in), [eof]),
-    open_port(pipe_name(out), [eof])
+    open_port(pipe_name(in), [eof, in]),
+    open_port(pipe_name(out), [eof, out])
   ).
 
 loop(PipeIn, PipeOut) ->
@@ -93,8 +93,10 @@ loop(PipeIn, PipeOut) ->
       end,
       loop(PipeIn, PipeOut);
     {Pipe, eof} ->
+      io:format("received EOF from pipe ~p~n", Pipe),
       connect_to_pipe_and_loop();
     {task_complete, CompletedTask} ->
+      io:format("recieved completed task information in port in a weird place. Sending to the outbound pipe~n"),
       PipeOut ! {self(), {data, task_to_str(CompletedTask)}},
       loop(PipeIn, PipeOut);
     stop ->
@@ -156,12 +158,12 @@ task_to_str(Task) ->
     {container, _}
   ] = Task,
 
-  "id=\"" ++ ID ++
-    "\"created_at=\"" ++ CreatedAt ++
-    "\"started_at=\"" ++ StartedAt ++
-    "\"finished_at=\"" ++ FinishedAt ++
-    "\"stdout=\"" ++ base64:encode(StdOut) ++
-    "\"stderr=\"" ++ base64:encode(StdErr) ++
+  "id=\"" ++ utils:number_to_list(ID) ++
+    "\"created_at=\"" ++ utils:number_to_list(CreatedAt) ++
+    "\"started_at=\"" ++ utils:number_to_list(StartedAt) ++
+    "\"finished_at=\"" ++ utils:number_to_list(FinishedAt) ++
+    "\"stdout=\"" ++ binary_to_list(base64:encode(StdOut)) ++
+    "\"stderr=\"" ++ binary_to_list(base64:encode(StdErr)) ++
     "\"result=\"" ++ Result ++
     "\"".
 

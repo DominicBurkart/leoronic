@@ -231,20 +231,21 @@ job_checker() ->
   {job_checker_scheduler, node()} ! {ran}.
 
 prune_running_task_record() ->
-  RunningTasks = ets:tab2list(running_tasks),
-  Infos = [
-    {Task, erlang:process_info(utils:select(pid, Task), status)} ||
-    {_TaskId, Task} <- RunningTasks
-  ],
-  RanOrErroredTasks = [
-    Task || {Task, _} <- lists:filter(
-      fun(E) ->
-        element(2, E) =:= undefined
-      end,
-      Infos
-    )
-  ],
-  [head ! {select(id, Task), task_complete, Task} || Task <- RanOrErroredTasks].
+  ok. % todo
+%%  RunningTasks = ets:tab2list(running_tasks),
+%%  Infos = [
+%%    {Task, erlang:process_info(utils:select(pid, Task), status)} ||
+%%    {_TaskId, Task} <- RunningTasks
+%%  ],
+%%  RanOrErroredTasks = [
+%%    Task || {Task, _} <- lists:filter(
+%%      fun(E) ->
+%%        element(2, E) =:= undefined
+%%      end,
+%%      Infos
+%%    )
+%%  ],
+%%  [head ! {select(id, Task), task_complete, Task} || Task <- RanOrErroredTasks].
 
 job_checker(LastRan, LastIdle) ->
   io:format("Running job checker...~n"),
@@ -379,10 +380,10 @@ loop() ->
       ets:delete(running_tasks, select(id, Task)),
       case select(respond_to, Task) of
         undefined ->
-          io:format("Respond to is undefined, adding to the completed tasks table."),
+          io:format("Respond to is undefined, adding to the completed tasks table.~n"),
           ets:insert(completed_tasks, lists:keydelete(pid, 1, Task)); % todo handle if nobody's listening
         ReturnPid ->
-          io:format("sending the completed task to the listed pid"),
+          io:format("sending the completed task to the listed pid~n"),
           ReturnPid ! {task_complete, lists:keydelete(pid, 1, Task)}
       end,
       loop();
@@ -390,8 +391,10 @@ loop() ->
     {ReturnPid, retrieve_task, TaskId} ->
       case ets:lookup(completed_tasks, TaskId) of
         [] ->
+          io:format("Task id NOT in completed task table ~p~n", [TaskId]),
           ReturnPid ! {task_not_complete, TaskId};
         Task ->
+          io:format("Task id in completed task table ~p~n", [TaskId]),
           ReturnPid ! {task_complete, Task},
           ets:delete(completed_tasks, TaskId)
       end,
