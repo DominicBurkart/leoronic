@@ -3,7 +3,7 @@ import builtins
 import datetime
 import functools
 import os
-import pickle
+import cloudpickle
 import random
 import re
 from dataclasses import dataclass
@@ -95,7 +95,7 @@ class InputTask(LeoronicBaseClass):
             setattr(self, name, value)
 
 
-@dataclass
+@dataclass(frozen=True)
 class CompletedTask(LeoronicBaseClass):
     id: str
     created_at: datetime.datetime
@@ -106,12 +106,13 @@ class CompletedTask(LeoronicBaseClass):
     result: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class AsyncTask(LeoronicBaseClass):
     id: TaskId
 
     @lru_cache(maxsize=1)
     def get_record(self) -> CompletedTask:
+        print("getting record...")
         return get_completed(self.id)
 
     def get(self) -> Output:
@@ -140,8 +141,14 @@ def write_pipe() -> IO[str]:
     return open(settings.write_pipe, mode="w", encoding="ascii")
 
 
-def read_pipe() -> IO[str]:
-    return open(settings.read_pipe, mode="r", encoding="ascii")
+def read_from_pipe() -> str:
+    read = ""
+    while len(read) < 2:
+        with open(settings.read_pipe, mode="r", encoding="ascii") as pipe:
+            print("reading pipe")
+            read = pipe.readline()
+            print("pipe read")
+    return read[:-1]
 
 
 def _parse_str_to_dict(s: str) -> Dict[str, str]:
@@ -171,7 +178,7 @@ def parse_task_response(response: str) -> CompletedTask:
         created_at=_str_to_date(d["created_at"]),
         started_at=_str_to_date(d["started_at"]),
         finished_at=_str_to_date(d["finished_at"]),
-        result=decode(d["result"]),
+        result=d["result"],
         stdout=decode(d["stdout"]),
         stderr=decode(d["stderr"]),
     )
@@ -189,22 +196,24 @@ def message_type(message: str) -> MessageType:
 
 
 def store_response(message: str) -> None:
-    message = message[:-1]  # always ends in newline
-    if message.strip() != "":
-        t = message_type(message)
+    print(f'in store response with message "{message}"')
+    t = message_type(message)
 
-        if t == MessageType.new_task_id:
-            _, client, task = message.split(" ")
-            unclaimed_id_maps[int(client)] = task
+    if t == MessageType.new_task_id:
+        print("parsing as new task id")
+        _, client, task = message.split(" ")
+        unclaimed_id_maps[int(client)] = task
 
-        elif t == MessageType.task_complete:
-            _, response = message.split(" ", maxsplit=1)
-            completed = parse_task_response(response)
-            running_tasks.pop(completed.id)
-            completed_tasks[completed.id] = completed
+    elif t == MessageType.task_complete:
+        print("parsing as task complete")
+        _, response = message.split(" ", maxsplit=1)
+        completed = parse_task_response(response)
+        running_tasks.pop(completed.id)
+        completed_tasks[completed.id] = completed
 
-        else:
-            raise NotImplementedError
+    else:
+        print("unkown type - erroring")
+        raise NotImplementedError
 
 
 def send_task(task: InputTask) -> TaskId:
@@ -213,11 +222,14 @@ def send_task(task: InputTask) -> TaskId:
 
     with write_pipe() as pipe:
         pipe.write(f"add task {str(task)}")
+        print("task succesfully written")
 
-    with read_pipe() as pipe:
-        while task_id is None:
-            store_response(pipe.read())
-            task_id = unclaimed_id_maps.pop(task._client_id, None)
+    while task_id is None:
+        store_response(read_from_pipe())
+        task_id = unclaimed_id_maps.pop(task._client_id, None)
+        print(f"unclaimed id maps: {unclaimed_id_maps}")
+
+    print(f"task ID identified: {task_id}")
 
     running_tasks[task_id] = task
     return task_id
@@ -240,15 +252,15 @@ def await_tasks(ids: Set[TaskId]) -> Iterator[CompletedTask]:
 
     collected = 0
     for task_id in ids.intersection(completed_tasks.keys()):
+        print(f"yielding completed task. Collected: {collected + 1}")
         yield completed_tasks[task_id]
         collected += 1
 
-    with read_pipe() as pipe:
-        while collected < len(ids):
-            store_response(pipe.read())
-            for task_id in ids.intersection(completed_tasks.keys()):
-                yield completed_tasks.pop(task_id)
-                collected += 1
+    while collected < len(ids):
+        store_response(read_from_pipe())
+        for task_id in ids.intersection(completed_tasks.keys()):
+            yield completed_tasks.pop(task_id)
+            collected += 1
 
 
 def variable_intersection(o1: object, o2: object) -> Set:
@@ -281,16 +293,17 @@ def check_reqs(reqs: Reqs, bad_fields: Iterable[str]) -> None:
 
 
 def handle_completed(task: CompletedTask):
-    result = pickle.loads(base64.b64decode(task.result[1:-1]))
+    result = cloudpickle.loads(base64.b64decode(task.result[1:]))
     if task.result[0] == "e":  # error response
         raise result
     return result
 
 
 def get_completed(task_id: TaskId) -> CompletedTask:
+    print(f"completed tasks: {completed_tasks}")
     if task_id in completed_tasks:
         return completed_tasks[task_id]
-    return next(await_tasks(set(task_id)))
+    return next(await_tasks({task_id}))
 
 
 def is_pipe_setting(setting_key: str) -> bool:

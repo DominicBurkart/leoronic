@@ -58,7 +58,7 @@ remove_pipes() ->
 connect_to_pipe_and_loop() ->
   loop(
     open_port(pipe_name(in), [eof, in]),
-    open_port(pipe_name(out), [eof, out])
+    open_port(pipe_name(out), [eof])
   ).
 
 loop(PipeIn, PipeOut) ->
@@ -97,9 +97,10 @@ loop(PipeIn, PipeOut) ->
       connect_to_pipe_and_loop();
     {task_complete, CompletedTask} ->
       io:format("recieved completed task information in port in a weird place. Sending to the outbound pipe~n"),
-      PipeOut ! {self(), {data, task_to_str(CompletedTask)}},
+      head_resp_to_pipe(PipeOut, {task_complete, CompletedTask}),
       loop(PipeIn, PipeOut);
     stop ->
+      io:format("Received STOP in port~n"),
       PipeIn ! {self(), close},
       PipeOut ! {self(), close},
       receive
@@ -108,8 +109,10 @@ loop(PipeIn, PipeOut) ->
           exit(normal)
       end;
     {'EXIT', Pipe, Reason} ->
-      remove_pipes(),
-      exit(port_terminated)
+      io:format("Received EXIT in port. Reason: ~p~n", [Reason]),
+      connect_to_pipe_and_loop()
+%%      remove_pipes(),
+%%      exit(port_terminated)
   end.
 
 list_to_bool(S) ->
@@ -196,7 +199,8 @@ as_bin(Response) ->
         list_to_binary(integer_to_list(TaskId)),
         bn()
       ];
-    {task_complete, Task} ->
+    {task_complete, Task} -> % called when client makes a retrieve request
+      io:format("binarizing completed task...~n"),
       [
         atom_to_binary(task_complete, utf8),
         bs(),
@@ -213,5 +217,12 @@ as_bin(Response) ->
   end.
 
 
+head_resp_to_pipe(Pipe, HeadResp) ->
+  spawn(
+    fun () ->
+      port_command(Pipe, as_bin(HeadResp))
+    end
+  ).
+
 head_resp_to_pipe(Pipe, Type, Value) ->
-  port_command(Pipe, as_bin(to_head(Type, Value))).
+  head_resp_to_pipe(Pipe, to_head(Type, Value)).

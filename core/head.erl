@@ -192,7 +192,7 @@ evaluate_worker_responses(Responses, Received, Total, ReturnPid, Tasks) ->
 
 get_runnable_tasks() ->
   io:format("Getting runnable tasks...~n"),
-  Tasks =  n_next_tasks(length(sorted_nodes()) * 3), % todo the const int on this line should be exposed as a parameter
+  Tasks = n_next_tasks(length(sorted_nodes()) * 3), % todo the const int on this line should be exposed as a parameter
   io:format("Got tasks: ~p~n", [Tasks]),
   case Tasks of
     [] ->
@@ -381,10 +381,16 @@ loop() ->
       case select(respond_to, Task) of
         undefined ->
           io:format("Respond to is undefined, adding to the completed tasks table.~n"),
-          ets:insert(completed_tasks, lists:keydelete(pid, 1, Task)); % todo handle if nobody's listening
+          ets:insert(completed_tasks, lists:keydelete(pid, 1, Task));
         ReturnPid ->
-          io:format("sending the completed task to the listed pid~n"),
-          ReturnPid ! {task_complete, lists:keydelete(pid, 1, Task)}
+          case erlang:process_info(ReturnPid) of
+            undefined ->
+              io:format("Respond to points to an undefined pid. Tabling result.~n"),
+              ets:insert(completed_tasks, lists:keydelete(pid, 1, Task));
+            _ ->
+              io:format("sending the completed task to the listed pid~n"),
+              ReturnPid ! {task_complete, lists:keydelete(pid, 1, Task)}
+          end
       end,
       loop();
 

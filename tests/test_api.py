@@ -51,7 +51,7 @@ def test_parse_task_response():
         finished_at=datetime.datetime(2019, 5, 22, 15, 53, 50),
         stdout=stdout,
         stderr=stderr,
-        result=result,
+        result=base64.b64encode(result.encode()).decode(),
     )
 
 
