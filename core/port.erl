@@ -57,8 +57,8 @@ remove_pipes() ->
 
 connect_to_pipe_and_loop() ->
   loop(
-    open_port(pipe_name(in), [eof]),
-    open_port(pipe_name(out), [eof])
+    open_port(pipe_name(in), [eof, in]),
+    open_port(pipe_name(out), [eof, out])
   ).
 
 loop(PipeIn, PipeOut) ->
@@ -89,15 +89,20 @@ loop(PipeIn, PipeOut) ->
         "idle true" ->
           head_resp_to_pipe(PipeOut, idle, true);
         "idle false" ->
-          head_resp_to_pipe(PipeOut, idle, false)
+          head_resp_to_pipe(PipeOut, idle, false);
+        Unkwown ->
+          io:format("bad input to port: ~p~n", [Unkwown])
       end,
       loop(PipeIn, PipeOut);
     {Pipe, eof} ->
+      io:format("received EOF from pipe ~p~n", Pipe),
       connect_to_pipe_and_loop();
     {task_complete, CompletedTask} ->
-      PipeOut ! {self(), {data, task_to_str(CompletedTask)}},
+      io:format("recieved completed task information in port in a weird place. Sending to the outbound pipe~n"),
+      head_resp_to_pipe(PipeOut, {task_complete, CompletedTask}),
       loop(PipeIn, PipeOut);
     stop ->
+      io:format("Received STOP in port~n"),
       PipeIn ! {self(), close},
       PipeOut ! {self(), close},
       receive
@@ -106,8 +111,10 @@ loop(PipeIn, PipeOut) ->
           exit(normal)
       end;
     {'EXIT', Pipe, Reason} ->
-      remove_pipes(),
-      exit(port_terminated)
+      io:format("Received EXIT in port. Reason: ~p~n", [Reason]),
+      connect_to_pipe_and_loop()
+%%      remove_pipes(),
+%%      exit(port_terminated)
   end.
 
 list_to_bool(S) ->
@@ -141,7 +148,7 @@ format_task_str(TaskStr) ->
 task_to_str(Task) ->
   [
     {id, ID},
-    {has_run, _},
+    {has_run, _has_run},
     {respond_to, _},
     {created_at, CreatedAt},
     {started_at, StartedAt},
@@ -156,22 +163,24 @@ task_to_str(Task) ->
     {container, _}
   ] = Task,
 
-  "id=\"" ++ ID ++
-    "\"created_at=\"" ++ CreatedAt ++
-    "\"started_at=\"" ++ StartedAt ++
-    "\"finished_at=\"" ++ FinishedAt ++
-    "\"stdout=\"" ++ base64:encode(StdOut) ++
-    "\"stderr=\"" ++ base64:encode(StdErr) ++
+  "id=\"" ++ utils:number_to_list(ID) ++
+    "\"created_at=\"" ++ utils:number_to_list(CreatedAt) ++
+    "\"started_at=\"" ++ utils:number_to_list(StartedAt) ++
+    "\"finished_at=\"" ++ utils:number_to_list(FinishedAt) ++
+    "\"stdout=\"" ++ binary_to_list(base64:encode(StdOut)) ++
+    "\"stderr=\"" ++ binary_to_list(base64:encode(StdErr)) ++
     "\"result=\"" ++ Result ++
     "\"".
 
 
-to_head(Type, Value) ->
+await_head_resp(Type, Value) ->
   Head = head_pid(),
   Head ! {self(), Type, Value},
   io:format("task sent from port to head. Head identity: ~p Type: ~p Value: ~p~n", [Head, Type, Value]),
   receive
-    Response -> Response
+    Response ->
+      io:format("received response: ~p~n", [Response]),
+      Response
   end.
 
 bs() ->
@@ -192,7 +201,8 @@ as_bin(Response) ->
         list_to_binary(integer_to_list(TaskId)),
         bn()
       ];
-    {task_complete, Task} ->
+    {task_complete, Task} -> % called when client makes a retrieve request
+      io:format("binarizing completed task...~n"),
       [
         atom_to_binary(task_complete, utf8),
         bs(),
@@ -209,5 +219,12 @@ as_bin(Response) ->
   end.
 
 
+head_resp_to_pipe(Pipe, HeadResp) ->
+  spawn(
+    fun () ->
+      port_command(Pipe, as_bin(HeadResp))
+    end
+  ).
+
 head_resp_to_pipe(Pipe, Type, Value) ->
-  Pipe ! as_bin(to_head(Type, Value)).
+  head_resp_to_pipe(Pipe, await_head_resp(Type, Value)).

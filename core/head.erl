@@ -192,7 +192,7 @@ evaluate_worker_responses(Responses, Received, Total, ReturnPid, Tasks) ->
 
 get_runnable_tasks() ->
   io:format("Getting runnable tasks...~n"),
-  Tasks =  n_next_tasks(length(sorted_nodes()) * 3), % todo the const int on this line should be exposed as a parameter
+  Tasks = n_next_tasks(length(sorted_nodes()) * 3), % todo the const int on this line should be exposed as a parameter
   io:format("Got tasks: ~p~n", [Tasks]),
   case Tasks of
     [] ->
@@ -231,20 +231,21 @@ job_checker() ->
   {job_checker_scheduler, node()} ! {ran}.
 
 prune_running_task_record() ->
-  RunningTasks = ets:tab2list(running_tasks),
-  Infos = [
-    {Task, erlang:process_info(utils:select(pid, Task), status)} ||
-    {_TaskId, Task} <- RunningTasks
-  ],
-  RanOrErroredTasks = [
-    Task || {Task, _} <- lists:filter(
-      fun(E) ->
-        element(2, E) =:= undefined
-      end,
-      Infos
-    )
-  ],
-  [head ! {select(id, Task), task_complete, Task} || Task <- RanOrErroredTasks].
+  ok. % todo
+%%  RunningTasks = ets:tab2list(running_tasks),
+%%  Infos = [
+%%    {Task, erlang:process_info(utils:select(pid, Task), status)} ||
+%%    {_TaskId, Task} <- RunningTasks
+%%  ],
+%%  RanOrErroredTasks = [
+%%    Task || {Task, _} <- lists:filter(
+%%      fun(E) ->
+%%        element(2, E) =:= undefined
+%%      end,
+%%      Infos
+%%    )
+%%  ],
+%%  [head ! {select(id, Task), task_complete, Task} || Task <- RanOrErroredTasks].
 
 job_checker(LastRan, LastIdle) ->
   io:format("Running job checker...~n"),
@@ -292,10 +293,7 @@ job_checker_scheduler(LastRan, LastIdle) -> % todo why do we need the last idle
 
 
 make_id() ->
-  list_to_integer(
-    integer_to_list(os:system_time(1)) ++
-    [C || C <- pid_to_list(self()), C >= $0 andalso C =< $9]
-  ).
+  (os:system_time(1000) * 10000) + random:uniform(10000). % todo what is a better way to generate these?
 
 n_next_tasks(Found, Last, N) ->
   case N of
@@ -336,7 +334,7 @@ loop() ->
       Id = make_id(),
       [
         {client_id, ClientId},
-        {port_pid, PortPid},
+        {port_pid, _PortPid},
         {await, Await},
         {cpus, CPUS},
         {memory, Memory},
@@ -347,7 +345,7 @@ loop() ->
       RespondTo =
         case Await of
           false -> undefined;
-          true -> PortPid
+          true -> ReturnPid
         end,
       Task = [
         {id, Id},
@@ -375,20 +373,31 @@ loop() ->
       loop();
 
     {TaskPid, task_complete, Task} ->
+      io:format("received task completion notice in head~n"),
       ets:delete(running_tasks, select(id, Task)),
       case select(respond_to, Task) of
         undefined ->
-          ets:insert(completed_tasks, Task); % todo handle if nobody's listening
+          io:format("Respond to is undefined, adding to the completed tasks table.~n"),
+          ets:insert(completed_tasks, lists:keydelete(pid, 1, Task));
         ReturnPid ->
-          ReturnPid ! {task_complete, Task}
+          case erlang:process_info(ReturnPid) of
+            undefined ->
+              io:format("Respond to points to an undefined pid. Tabling result.~n"),
+              ets:insert(completed_tasks, lists:keydelete(pid, 1, Task));
+            _ ->
+              io:format("sending the completed task to the listed pid~n"),
+              ReturnPid ! {task_complete, lists:keydelete(pid, 1, Task)}
+          end
       end,
       loop();
 
     {ReturnPid, retrieve_task, TaskId} ->
       case ets:lookup(completed_tasks, TaskId) of
         [] ->
+          io:format("Task id NOT in completed task table ~p~n", [TaskId]),
           ReturnPid ! {task_not_complete, TaskId};
         Task ->
+          io:format("Task id in completed task table ~p~n", [TaskId]),
           ReturnPid ! {task_complete, Task},
           ets:delete(completed_tasks, TaskId)
       end,

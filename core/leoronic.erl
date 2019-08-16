@@ -119,7 +119,8 @@ handle_call(stop, _From, _State) ->
 handle_cast({perform_task, Task}, State) ->
   io:format("Performing task...~n"),
   CompletedTaskInfo = perform_task_internal(Task),
-  head:head_pid() ! CompletedTaskInfo,
+  io:format("Completed task info: ~p~n", [CompletedTaskInfo]),
+  head:head_pid() ! {self(), task_complete, CompletedTaskInfo},
   {noreply, State}.
 
 code_change(_, State, _) ->
@@ -136,7 +137,10 @@ perform_task_internal(Task) ->
     sub([memory, storage, cpus], Task),
     integer_to_list(TaskId)
   ),
-  impute_task_values(Task, Ran).
+  io:format("ran: ~p~n", [Ran]),
+  Imputed = impute_task_values(Task, Ran),
+  io:format("imputed values: ~p~n", [Imputed]),
+  Imputed.
 
 
 send_system_info() -> % yields memory in MB
