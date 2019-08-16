@@ -3,27 +3,16 @@ import builtins
 import datetime
 import functools
 import os
-import random
 import re
 from dataclasses import dataclass
-from functools import lru_cache
 from enum import Enum
-from typing import (
-    Set,
-    Iterable,
-    Dict,
-    Callable,
-    TypeVar,
-    List,
-    IO,
-    Optional,
-    Union,
-    Iterator,
-)
+from functools import lru_cache
+from typing import Set, Iterable, Dict, Callable, TypeVar, List, IO, Iterator
 
-import dill  # type: ignore
+import cloudpickle  # type: ignore
+from mypy_extensions import TypedDict
 
-from .docker_commands import make_container
+from .worker_commands import make_command
 
 ### types
 
@@ -32,7 +21,17 @@ ClientId = int
 Input = TypeVar("Input")
 Output = TypeVar("Output")
 Fun = Callable[[Input], Output]
-Reqs = Dict[str, Union[bool, int]]  # InputTask values.
+Reqs = TypedDict(
+    "Reqs",
+    {
+        "wait": bool,  # if false, result not automatically piped out of leoronic.
+        "cpus": int,
+        "memory": int,  # in megabytes
+        "storage": int,  # in megabytes
+        "dockerless": bool,
+    },
+    total=False,
+)
 
 
 class LeoronicBaseClass:
@@ -57,30 +56,26 @@ class MessageTypeNotFound(LeoronicError):
 
 class Settings(LeoronicBaseClass):
     await_unknown_tasks: bool = False
-    read_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_in.pipe")
-    write_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_out.pipe")
-
-    def update(self, new: Dict[str, Union[bool, str]]) -> None:
-        for name, value in new.items():
-            setattr(self, name, value)
+    read_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_out.pipe")
+    write_pipe: str = os.path.join(os.path.expanduser("~"), "leoronic_in.pipe")
+    chunk_size: int = 20
 
 
-@dataclass
+@dataclass(frozen=True)
 class InputTask(LeoronicBaseClass):
     container: str
-    _client_id: int = 0  # defined just before the object is piped out
     wait: bool = True  # if false, result not automatically piped out of leoronic.
     cpus: int = 1
     memory: int = 500  # in megabytes
-    storage: int = 0  # in megabytes
-    dockerless: bool = False
+    storage: int = 10  # in megabytes
+    dockerless: bool = True
 
     def __str__(self):
         return ", ".join(
             builtins.map(
                 lambda v: str(v),
                 [
-                    self._client_id,
+                    id(self),
                     self.wait,
                     self.cpus,
                     self.memory,
@@ -91,12 +86,8 @@ class InputTask(LeoronicBaseClass):
             )
         )
 
-    def update(self, reqs: Reqs) -> None:
-        for name, value in reqs.items():
-            setattr(self, name, value)
 
-
-@dataclass
+@dataclass(frozen=True)
 class CompletedTask(LeoronicBaseClass):
     id: str
     created_at: datetime.datetime
@@ -107,7 +98,7 @@ class CompletedTask(LeoronicBaseClass):
     result: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class AsyncTask(LeoronicBaseClass):
     id: TaskId
 
@@ -130,7 +121,7 @@ settings = Settings()
 running_tasks: Dict[TaskId, "InputTask"] = dict()
 completed_tasks: Dict[TaskId, "CompletedTask"] = dict()
 unclaimed_id_maps: Dict[ClientId, TaskId] = dict()
-# todo use parallel-friendly dicts https://stackoverflow.com/a/38560235
+task_requirements = {}  # type: Reqs
 
 
 ### internal functions
@@ -140,8 +131,12 @@ def write_pipe() -> IO[str]:
     return open(settings.write_pipe, mode="w", encoding="ascii")
 
 
-def read_pipe() -> IO[str]:
-    return open(settings.read_pipe, mode="r", encoding="ascii")
+def read_from_pipe() -> str:
+    read = ""
+    while len(read) < 2:
+        with open(settings.read_pipe, mode="r", encoding="ascii") as pipe:
+            read = pipe.readline()
+    return read[:-1]
 
 
 def _parse_str_to_dict(s: str) -> Dict[str, str]:
@@ -152,11 +147,11 @@ def _parse_str_to_dict(s: str) -> Dict[str, str]:
 
 
 def fields(o: object) -> Iterable[str]:
+    """only designed to work on classes with type annotations"""
     return o.__annotations__.keys()
 
 
 def _str_to_date(s: str) -> datetime.datetime:
-    """only designed to work on classes with type annotations"""
     return datetime.datetime.utcfromtimestamp(int(s))
 
 
@@ -166,19 +161,17 @@ def decode(s: str) -> str:
 
 def parse_task_response(response: str) -> CompletedTask:
     d = _parse_str_to_dict(response)
+    out = decode(d["stdout"])
+    err = decode(d["stderr"])
     return CompletedTask(
         id=d["id"],
         created_at=_str_to_date(d["created_at"]),
         started_at=_str_to_date(d["started_at"]),
         finished_at=_str_to_date(d["finished_at"]),
-        result=decode(d["result"]),
-        stdout=decode(d["stdout"]),
-        stderr=decode(d["stderr"]),
+        result=d["result"],
+        stdout=out if out == "" else out[:-1],  # removes trailing newline
+        stderr=err if err == "" else err[:-1],
     )
-
-
-def get_next_client_id() -> int:
-    return (os.getpid() * (10 ** 10)) + random.randint(1, 10 ** 10)
 
 
 def message_type(message: str) -> MessageType:
@@ -189,34 +182,42 @@ def message_type(message: str) -> MessageType:
 
 
 def store_response(message: str) -> None:
-    if message.strip() != "":
-        t = message_type(message)
+    t = message_type(message)
 
-        if t == MessageType.new_task_id:
-            _, client, task = message.split(" ")
-            unclaimed_id_maps[int(client)] = task
+    if t == MessageType.new_task_id:
+        _, client_id, task_id = message.split(" ")
+        unclaimed_id_maps[int(client_id)] = task_id
 
-        elif t == MessageType.task_complete:
-            _, response = message.split(" ", maxsplit=1)
-            completed = parse_task_response(response)
+    elif t == MessageType.task_complete:
+        _, response = message.split(" ", maxsplit=1)
+        completed = parse_task_response(response)
+        try:
             running_tasks.pop(completed.id)
-            completed_tasks[completed.id] = completed
+        except KeyError:
+            with open("completed_tasks.txt", "a") as f:
+                print(completed_tasks, file=f)
+                print("\n\n\n\n\n\n\n", file=f)
+            with open("running_tasks.txt", "a") as f:
+                print(running_tasks, file=f)
+                print("\n\n\n\n\n\n\n", file=f)
+            with open("unclaimed_id_maps.txt", "a") as f:
+                print(unclaimed_id_maps, f)
+                print("\n\n\n\n\n\n\n", file=f)
+        completed_tasks[completed.id] = completed
 
-        else:
-            raise NotImplementedError
+    else:
+        raise NotImplementedError
 
 
 def send_task(task: InputTask) -> TaskId:
-    task._client_id = get_next_client_id()
     task_id = None
 
     with write_pipe() as pipe:
         pipe.write(f"add task {str(task)}")
 
-    with read_pipe() as pipe:
-        while task_id is None:
-            store_response(pipe.read())
-            task_id = unclaimed_id_maps.pop(task._client_id, None)
+    while task_id is None:
+        store_response(read_from_pipe())
+        task_id = unclaimed_id_maps.pop(id(task), None)
 
     running_tasks[task_id] = task
     return task_id
@@ -242,12 +243,11 @@ def await_tasks(ids: Set[TaskId]) -> Iterator[CompletedTask]:
         yield completed_tasks[task_id]
         collected += 1
 
-    with read_pipe() as pipe:
-        while collected < len(ids):
-            store_response(pipe.read())
-            for task_id in ids.intersection(completed_tasks.keys()):
-                yield completed_tasks.pop(task_id)
-                collected += 1
+    while collected < len(ids):
+        store_response(read_from_pipe())
+        for task_id in ids.intersection(completed_tasks.keys()):
+            yield completed_tasks.pop(task_id)
+            collected += 1
 
 
 def variable_intersection(o1: object, o2: object) -> Set:
@@ -280,7 +280,7 @@ def check_reqs(reqs: Reqs, bad_fields: Iterable[str]) -> None:
 
 
 def handle_completed(task: CompletedTask):
-    result = dill.loads(base64.b64decode(task.result[1:].encode()))
+    result = cloudpickle.loads(base64.b64decode(task.result[1:]))
     if task.result[0] == "e":  # error response
         raise result
     return result
@@ -289,7 +289,7 @@ def handle_completed(task: CompletedTask):
 def get_completed(task_id: TaskId) -> CompletedTask:
     if task_id in completed_tasks:
         return completed_tasks[task_id]
-    return next(await_tasks(set(task_id)))
+    return next(await_tasks({task_id}))
 
 
 def is_pipe_setting(setting_key: str) -> bool:
@@ -299,56 +299,76 @@ def is_pipe_setting(setting_key: str) -> bool:
 ### API
 
 
-def apply_async(fun: Fun, *args, reqs: Optional[Reqs] = None, **kwargs) -> AsyncTask:
-    if reqs is None:
-        reqs = dict()
+def set_reqs(reqs: Reqs):  # todo untested
+    for key in [key for key in reqs]:
+        del key  # reqs.clear() is not implemented in TypedDict in 0.4.1
+    task_requirements.update(reqs)
 
-    check_reqs(reqs, ["container"])
-    task = InputTask(container=make_container(functools.partial(fun, *args, **kwargs)))
-    task.update(reqs)
+
+def reset_requirements():  # todo untested
+    task_requirements.clear()
+
+
+def apply_async(fun: Fun, *args) -> AsyncTask:
+    check_reqs(task_requirements, ["container"])
+    task = InputTask(  # type: ignore
+        container=make_command(functools.partial(fun, *args)), *task_requirements
+    )
     task_id = send_task(task)
 
     return AsyncTask(id=task_id)
 
 
-def apply(fun: Fun, *args, reqs: Optional[Reqs] = None, **kwargs) -> Output:
-    return apply_async(fun, *args, reqs, **kwargs).get()
+def apply(fun: Fun, *args) -> Output:
+    return apply_async(fun, *args).get()  # type: ignore
+    # todo: document "container" param issue
 
 
-def map(
-    fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
-) -> List[Output]:
-    return [task.get() for task in map_async(fun, iterable, reqs)]
+def map(fun: Fun, iterable: Iterable[Input]) -> List[Output]:
+    return [task.get() for task in map_async(fun, iterable)]
 
 
-def map_async(
-    fun: Fun, iterable: Iterable, reqs: Optional[Reqs] = None
-) -> List[AsyncTask]:
-    return [apply_async(fun, value, reqs) for value in iterable]
+def map_async(fun: Fun, iterable: Iterable) -> List[AsyncTask]:
+    return [apply_async(fun, value) for value in iterable]
 
 
 def imap(
-    fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
+    fun: Fun, iterable: Iterable[Input], chunksize=settings.chunk_size
 ) -> Iterable[Output]:
-    for task in map_async(fun, iterable, reqs):
-        yield task.get()
+    input_exhausted = False
+    async_tasks = []
+    while not input_exhausted:
+        try:
+            for _ in range(chunksize):
+                async_task = apply_async(fun, next(iter(iterable)))
+                async_tasks.append(async_task)
+        except StopIteration:
+            input_exhausted = True
+        for task in async_tasks:
+            yield task.get()
 
 
 def imap_unordered(
-    fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
+    fun: Fun, iterable: Iterable[Input], chunksize=settings.chunk_size
 ) -> Iterable[Output]:
-    task_ids = {a.id for a in map_async(fun, iterable, reqs)}
-    for completed in await_tasks(task_ids):
-        yield handle_completed(completed)
+    input_exhausted = False
+    async_tasks = set()
+    while not input_exhausted:
+        try:
+            for _ in range(chunksize):
+                async_task = apply_async(fun, next(iter(iterable)))
+                async_tasks.add(async_task)
+        except StopIteration:
+            input_exhausted = True
+        for task in async_tasks:
+            yield task.get()
 
 
-def starmap(
-    fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
-) -> List[Output]:
-    return map(fun, iterable, reqs)
+def starmap(fun: Fun, iterable: Iterable[Iterable[Input]]) -> Iterable[Output]:
+    async_tasks = starmap_async(fun, iterable)
+    for task in async_tasks:
+        yield task.get()
 
 
-def starmap_async(
-    fun: Fun, iterable: Iterable[Input], reqs: Optional[Reqs] = None
-) -> List[AsyncTask]:
-    return map_async(fun, iterable, reqs)
+def starmap_async(fun: Fun, iterable: Iterable[Iterable[Input]]) -> List[AsyncTask]:
+    return [apply_async(fun, *value) for value in iterable]

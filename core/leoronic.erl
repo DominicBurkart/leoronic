@@ -30,7 +30,9 @@ run_container/3
   stop/1,
   alert_new_node/0,
   spawn_kid/3,
-  loop_check_should_be_head/0
+  loop_check_should_be_head/0,
+  system_info/0,
+  send_system_info/1
   ]).
 -record(state, {kids=none}).
 -type state() :: #state{}.
@@ -55,7 +57,18 @@ add_child_process(Mod, Fun, Args) ->
 %%housekeeping(Pid, Cmd) ->
 %%  gen_server:call(Pid, Cmd).
 
+send_system_info(Pid) ->
+  Info = system_info(),
+  io:format("system information collected on worker ~p: ~p~n", [node(), Info]),
+  io:format("sending information to ~p~n", [Pid]),
+  Pid ! Info.
+
+system_info() ->
+  io:format("sending system info..."),
+  gen_server:call(?MODULE, send_system_info).
+
 perform_task(Task) ->
+  io:format("Sending cast to perform task.~n"),
   gen_server:cast(?MODULE, {perform_task, Task}).
 
 stop(Pid) ->
@@ -104,8 +117,10 @@ handle_call(stop, _From, _State) ->
   {no_reply}.
 
 handle_cast({perform_task, Task}, State) ->
+  io:format("Performing task...~n"),
   CompletedTaskInfo = perform_task_internal(Task),
-  head:head_pid() ! CompletedTaskInfo,
+  io:format("Completed task info: ~p~n", [CompletedTaskInfo]),
+  head:head_pid() ! {self(), task_complete, CompletedTaskInfo},
   {noreply, State}.
 
 code_change(_, State, _) ->
@@ -115,21 +130,25 @@ code_change(_, State, _) ->
 
 
 perform_task_internal(Task) ->
+  io:format("in perform task internal function. Task passed: ~p~n", [Task]),
   [{id, TaskId}] = sub([id], Task),
-  impute_task_values(
-    Task,
-    run_container(
-      select(container, Task),
-      sub([memory, storage, cpus], Task),
-      integer_to_list(TaskId)
-    )
-  ).
+  Ran = run_container(
+    select(container, Task),
+    sub([memory, storage, cpus], Task),
+    integer_to_list(TaskId)
+  ),
+  io:format("ran: ~p~n", [Ran]),
+  Imputed = impute_task_values(Task, Ran),
+  io:format("imputed values: ~p~n", [Imputed]),
+  Imputed.
 
 
 send_system_info() -> % yields memory in MB
   application:start(sasl),
   application:start(os_mon),
-  [{_, TotalMemory}, {_, CurrentMemory}, {_, _}] = memsup:get_system_memory_data(),
+  MemoryData = memsup:get_system_memory_data(),
+  TotalMemory = utils:select(total_memory, MemoryData),
+  CurrentMemory = utils:select(free_memory, MemoryData),
   application:stop(os_mon),
   application:stop(sasl),
 
@@ -137,7 +156,7 @@ send_system_info() -> % yields memory in MB
 
   {
     system_info,
-    {[
+    [
       {node, node()},
       {total_memory, TotalMemory / 1000000},
       {free_memory, CurrentMemory / 1000000},
@@ -149,7 +168,7 @@ send_system_info() -> % yields memory in MB
             Cores
         end
       }
-    ]}
+    ]
   }.
 
 

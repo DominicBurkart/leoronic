@@ -1,7 +1,9 @@
-ls core/*.erl | xargs erlc +debug_info
+(cd core; erlc +debug_info *.erl)
 dialyzer --check_plt
 if [ "$(dialyzer -Wno_unused . | tail -n 1)" = "done (warnings were emitted)" ]
 then
     dialyzer -Wno_unused .
+    rm core/*.beam
     exit 1
 fi
+rm core/*.beam

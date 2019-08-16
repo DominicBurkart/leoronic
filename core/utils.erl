@@ -16,7 +16,8 @@
   indexed/1,
   in_match_specification/2,
   not_in_match_specification/2,
-  root_directory/0
+  root_directory/0,
+  number_to_list/1
 ]).
 
 root_directory() ->
@@ -32,6 +33,19 @@ select(Key, L) ->
   element(2, lists:keyfind(Key, 1, L)).
 
 sub(KeyList, L) -> [{K1, V} || {K1, V} <- L, lists:member(K1, KeyList)]. % retains order in L
+
+number_to_list(Number) ->
+  case is_integer(Number) of
+    true ->
+      integer_to_list(Number);
+    false ->
+      case is_float(Number) of
+        true ->
+          float_to_list(Number, [{decimals, 2}]);
+        false ->
+          io:format("bad input to number_to_list: ~p", [Number])
+      end
+  end.
 
 indexed(L) ->
   lists:zip(lists:seq(1, length(L)), L).
