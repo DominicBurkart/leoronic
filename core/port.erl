@@ -58,7 +58,7 @@ remove_pipes() ->
 connect_to_pipe_and_loop() ->
   loop(
     open_port(pipe_name(in), [eof, in]),
-    open_port(pipe_name(out), [eof])
+    open_port(pipe_name(out), [eof, out])
   ).
 
 loop(PipeIn, PipeOut) ->
@@ -89,7 +89,9 @@ loop(PipeIn, PipeOut) ->
         "idle true" ->
           head_resp_to_pipe(PipeOut, idle, true);
         "idle false" ->
-          head_resp_to_pipe(PipeOut, idle, false)
+          head_resp_to_pipe(PipeOut, idle, false);
+        Unkwown ->
+          io:format("bad input to port: ~p~n", [Unkwown])
       end,
       loop(PipeIn, PipeOut);
     {Pipe, eof} ->
@@ -171,7 +173,7 @@ task_to_str(Task) ->
     "\"".
 
 
-to_head(Type, Value) ->
+await_head_resp(Type, Value) ->
   Head = head_pid(),
   Head ! {self(), Type, Value},
   io:format("task sent from port to head. Head identity: ~p Type: ~p Value: ~p~n", [Head, Type, Value]),
@@ -225,4 +227,4 @@ head_resp_to_pipe(Pipe, HeadResp) ->
   ).
 
 head_resp_to_pipe(Pipe, Type, Value) ->
-  head_resp_to_pipe(Pipe, to_head(Type, Value)).
+  head_resp_to_pipe(Pipe, await_head_resp(Type, Value)).

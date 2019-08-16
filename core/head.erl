@@ -293,10 +293,7 @@ job_checker_scheduler(LastRan, LastIdle) -> % todo why do we need the last idle
 
 
 make_id() ->
-  list_to_integer(
-    integer_to_list(os:system_time(1)) ++
-    [C || C <- pid_to_list(self()), C >= $0 andalso C =< $9]
-  ).
+  (os:system_time(1000) * 10000) + random:uniform(10000). % todo what is a better way to generate these?
 
 n_next_tasks(Found, Last, N) ->
   case N of

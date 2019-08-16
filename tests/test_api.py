@@ -28,13 +28,16 @@ def test_parse_task_response():
     stderr = "test stderr"
     result = "test result"
 
+    outnewline = stdout + "\n"
+    errnewline = stderr + "\n"
+
     test = f"""
         id="1"
         created_at="1558540420"
         started_at="1558540425"
         finished_at="1558540430"
-        stdout="{base64.b64encode(stdout.encode()).decode()}"
-        stderr="{base64.b64encode(stderr.encode()).decode()}"
+        stdout="{base64.b64encode(outnewline.encode()).decode()}"
+        stderr="{base64.b64encode(errnewline.encode()).decode()}"
         result="{base64.b64encode(result.encode()).decode()}"
     """.replace(
         "\n", ""

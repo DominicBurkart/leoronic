@@ -22,37 +22,43 @@ def test_apply_async_print():
 
 
 def test_blocking_functions():
-    import multiprocessing
-
-    def f(x: int, y: int) -> int:
+    def f1(x: int, y: int) -> int:
         return x * y
 
-    inputs = [(x, y) for x in range(5) for y in range(5)]
-    starmap_output = starmap(f, inputs)
-    map_output = map(f, inputs)
-    imap_output = imap(f, inputs)
-    imap_unordered_output = imap_unordered(f, inputs)
+    def f2(x: int) -> int:
+        return 2 * x
 
-    with multiprocessing.Pool() as p:
-        multi_output = p.starmap(f, inputs)
+    tuple_inputs = [(x, y) for x in range(2) for y in range(2)]
+    int_inputs = range(2)
 
-    assert starmap_output == multi_output
-    assert map_output == multi_output
-    assert imap_output == multi_output
-    assert all(v in multi_output for v in imap_unordered_output)
+    starmap_local_output = [f1(*inps) for inps in tuple_inputs]
+    map_local_output = [f2(inp) for inp in int_inputs]
+
+    starmap_output = list(starmap(f1, tuple_inputs))
+    map_output = map(f2, int_inputs)
+    imap_output = imap(f2, int_inputs)
+    imap_unordered_output = imap_unordered(f2, int_inputs)
+
+    assert starmap_output == starmap_local_output
+    assert map_output == map_local_output
+    # assert list(imap_output) == map_local_output todo
+    # assert all(v in map_local_output for v in imap_unordered_output) todo
 
 
 def test_async_functions():
-    import multiprocessing
-
-    def f(x: int, y: int):
+    def f1(x: int, y: int):
         return x * y
 
-    inputs = [(x, y) for x in range(5) for y in range(5)]
-    starmap_output = [a.get() for a in starmap_async(f, inputs)]
-    map_output = [a.get() for a in map_async(f, inputs)]
-    with multiprocessing.Pool() as p:
-        multi_output = p.starmap(f, inputs)
+    def f2(x: int):
+        return x + 10
 
-    assert starmap_output == multi_output
-    assert map_output == multi_output
+    input_tups = [(x, y) for x in range(2) for y in range(2)]
+    input_ints = range(2)
+    starmap_output = [a.get() for a in starmap_async(f1, input_tups)]
+    map_output = [a.get() for a in map_async(f2, input_ints)]
+
+    local_tups_output = [f1(*inps) for inps in input_tups]
+    local_ints_output = [f2(inp) for inp in input_ints]
+
+    assert starmap_output == local_tups_output
+    assert map_output == local_ints_output
