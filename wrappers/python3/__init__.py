@@ -335,12 +335,13 @@ def map_async(fun: Fun, iterable: Iterable) -> List[AsyncTask]:
 def imap(
     fun: Fun, iterable: Iterable[Input], chunksize=settings.chunk_size
 ) -> Iterable[Output]:
+    iterator = iter(iterable)
     input_exhausted = False
-    async_tasks = []
     while not input_exhausted:
+        async_tasks = []
         try:
             for _ in range(chunksize):
-                async_task = apply_async(fun, next(iter(iterable)))
+                async_task = apply_async(fun, next(iterator))
                 async_tasks.append(async_task)
         except StopIteration:
             input_exhausted = True
@@ -351,17 +352,19 @@ def imap(
 def imap_unordered(
     fun: Fun, iterable: Iterable[Input], chunksize=settings.chunk_size
 ) -> Iterable[Output]:
+    iterator = iter(iterable)
     input_exhausted = False
-    async_tasks = set()
     while not input_exhausted:
+        async_task_ids = set()
         try:
             for _ in range(chunksize):
-                async_task = apply_async(fun, next(iter(iterable)))
-                async_tasks.add(async_task)
+                async_task = apply_async(fun, next(iterator))
+                async_task_ids.add(async_task.id)
         except StopIteration:
             input_exhausted = True
-        for task in async_tasks:
-            yield task.get()
+        completed_tasks = await_tasks(async_task_ids)
+        for completed_task in completed_tasks:
+            yield handle_completed(completed_task)
 
 
 def starmap(fun: Fun, iterable: Iterable[Iterable[Input]]) -> Iterable[Output]:
