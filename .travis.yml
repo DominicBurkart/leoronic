@@ -13,7 +13,7 @@ matrix:
       script:
         - shellcheck *.sh
 
-    - name: "erlang x python integration tests & python tests"
+    - name: "erlang x python integration tests"
       language: erlang
       otp_release: 22.0
       cache:
@@ -28,8 +28,7 @@ matrix:
         - sudo pip3 install -r requirements.txt
       script:
         - |
-          ( sleep 30 && pytest -x tests/test_integration.py ) &
-          ( timeout --preserve-status 240 bash compile_and_run.sh )
+          ( bash compile_and_run.sh ) & ( sleep 10 && pytest -x tests/test_integration.py )
       after_success:
         - codecov
 

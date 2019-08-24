@@ -47,7 +47,6 @@ should_be_head() ->
 
 head_processes(Nodes) ->
   IndexedNodes = indexed(Nodes),
-  io:format("indexed nodes: ~p~n", IndexedNodes),
   NHeads = number_of_heads(),
   HeadIndexForEachNode =
     lists:seq(1, NHeads) ++ % each head node is its own head.
@@ -57,7 +56,6 @@ head_processes(Nodes) ->
 
 worker_head_tuples() ->
   Nodes = sorted_nodes(),
-  io:format("Worker pids returning ~p~n", [lists:zip(head_processes(Nodes), Nodes)]),
   lists:zip(head_processes(Nodes), Nodes).
 
 
@@ -66,31 +64,26 @@ worker_pids(Head) ->
 
 
 head_pid() ->
-  io:format("head_pid called~n"),
   element(1, lists:keyfind(node(), 2, worker_head_tuples())).
 
 
 % todo refactor so that the dockerfile, stdout, stderr, and result all have their own tables.
 head() ->
-  io:format("adding head ets tables & job_checker_scheduler ~n"),
   ets:new(task_instructions, [set, named_table, public]),
   ets:new(running_tasks, [set, named_table, public]),
   ets:new(completed_tasks, [set, named_table, public]),
   ets:new(params, [set, named_table, public]),
-  io:format("tables added in head, starting children processes... ~n"),
   Now = os:system_time(1),
   leoronic:add_child_process(
     head,
     job_checker_scheduler,
     [Now, Now]
   ),
-  io:format("adding ask for params thread in head...~n"),
   leoronic:add_child_process(
     head,
     ask_for_params,
     [self()]
   ),
-  io:format("starting head loop...~n"),
   loop().
 
 
@@ -112,7 +105,6 @@ ask_for_worker_info([], _ReturnPid) ->
   ok;
 
 ask_for_worker_info([Worker | Workers], ReturnPid) ->
-  io:format("spawning send_system_info on worker ~p~n", [Worker]),
   spawn(Worker, leoronic, send_system_info, [ReturnPid]), % todo ideally would be in the appropriate kids table.
   ask_for_worker_info(Workers, ReturnPid).
 
@@ -191,17 +183,13 @@ evaluate_worker_responses(Responses, Received, Total, ReturnPid, Tasks) ->
   end.
 
 get_runnable_tasks() ->
-  io:format("Getting runnable tasks...~n"),
   Tasks = n_next_tasks(length(sorted_nodes()) * 3), % todo the const int on this line should be exposed as a parameter
-  io:format("Got tasks: ~p~n", [Tasks]),
   case Tasks of
     [] ->
       undefined;
     _ ->
       Workers = worker_pids(head_pid()),
-      io:format("Got workers: ~p~n", [Workers]),
       Evaluator = spawn(node(), head, evaluate_worker_responses, [self(), Tasks, length(Workers)]), % todo set as child
-      io:format("Got evaluator pid: ~p~n", [Evaluator]),
       ask_for_worker_info(Workers, Evaluator),
       receive
         {final, FinalResponse} -> FinalResponse
@@ -218,7 +206,6 @@ start_jobs([]) ->
   ok;
 
 start_jobs([{Node, Task} | OtherJobs]) ->
-  io:format("start_jobs is running with the following input: ~p~n", [{Node, Task} | OtherJobs]),
   Id = select(id, Task),
   ets:delete(task_instructions, Id),
   ets:insert(running_tasks, {Id, Task}),
@@ -248,25 +235,20 @@ prune_running_task_record() ->
 %%  [head ! {select(id, Task), task_complete, Task} || Task <- RanOrErroredTasks].
 
 job_checker(LastRan, LastIdle) ->
-  io:format("Running job checker...~n"),
   prune_running_task_record(),
   case {LastRan, LastIdle} of
     {-1, -1} ->
       job_checker_scheduler ! {self(), get_times},
-      io:format("Requesting job_checker last ran information from ~p...~n", [self()]),
       receive
         {times, RealLastRan, RealLastIdle} ->
           job_checker(RealLastRan, RealLastIdle)
       end;
     _ ->
-      io:format("jobchecker ran with these parameters: LastRan: ~p LastIdle: ~p~n", [LastRan, LastIdle]),
       % todo check for timed-out tasks / idling here
       case get_runnable_tasks() of
         undefined ->
-          io:format("No runnable tasks found~n"),
           ok;
         Pairs ->
-          io:format("Jobs being started...~n"),
           start_jobs(Pairs)
       end
   end.
@@ -276,13 +258,8 @@ job_checker_scheduler(LastRan, LastIdle) -> % todo why do we need the last idle
   receive
     {idle} -> ok; % todo
     {ran} ->
-      io:format("job checker scheduler: received ran confirmation~n"),
       job_checker_scheduler(os:system_time(1), LastIdle);
     {ReturnPid, get_times} ->
-      io:format(
-        "job checker scheduler: run / idle time confirmations requested from ~p. Returning ~p~n",
-        [ReturnPid, {times, LastRan, LastIdle}]
-      ),
       ReturnPid ! {times, LastRan, LastIdle},
       job_checker_scheduler(LastRan, LastIdle)
   after 1000 * 60 * 2 ->
@@ -293,44 +270,36 @@ job_checker_scheduler(LastRan, LastIdle) -> % todo why do we need the last idle
 
 
 make_id() ->
-  (os:system_time(1000) * 10000) + random:uniform(10000). % todo what is a better way to generate these?
+  (os:system_time(1000) * 10000) + rand:uniform(10000). % todo what is a better way to generate these?
 
 n_next_tasks(Found, Last, N) ->
   case N of
     0 ->
-      io:format("n_next_tasks returning ~p~n", [Found]),
       Found;
     _ ->
       case ets:next(task_instructions, Last) of
         '$end_of_table' ->
-          io:format("end of table reached in n_next_tasks, returning ~p~n", [Found]),
           Found;
         Key ->
           Task = ets:lookup(task_instructions, Key),
-          io:format("Found another task in n_next_tasks..."),
           n_next_tasks(Task ++ Found, Key, N - 1)
       end
   end.
 
 n_next_tasks(N) ->
-  io:format("getting next ~p tasks.~n", [N]),
   case ets:first(task_instructions) of
     '$end_of_table' ->
-      io:format("no tasks found in task_instructions table.~n"),
       [];
     Key ->
-      io:format("At least one task found in task_instructions.~n"),
       Task = ets:lookup(task_instructions, Key),
       n_next_tasks(Task, Key, N - 1)
   end.
 
 
 loop() ->
-  io:format("head waiting for input at ~p...~n", [self()]),
   spawn(head, job_checker, []),
   receive
     {ReturnPid, add_task, PartialTask} ->
-      io:format("Adding task to instructions table...~n"),
       Id = make_id(),
       [
         {client_id, ClientId},
@@ -365,7 +334,6 @@ loop() ->
       ],
       ets:insert(task_instructions, {Id, Task}),
       ReturnPid ! {new_task_id, ClientId, Id},
-      io:format("Task added to table in head (id: ~p)...~n", [Id]),
       loop();
 
     {TaskPid, running_task, Task} ->
@@ -373,19 +341,15 @@ loop() ->
       loop();
 
     {TaskPid, task_complete, Task} ->
-      io:format("received task completion notice in head~n"),
       ets:delete(running_tasks, select(id, Task)),
       case select(respond_to, Task) of
         undefined ->
-          io:format("Respond to is undefined, adding to the completed tasks table.~n"),
           ets:insert(completed_tasks, lists:keydelete(pid, 1, Task));
         ReturnPid ->
           case erlang:process_info(ReturnPid) of
             undefined ->
-              io:format("Respond to points to an undefined pid. Tabling result.~n"),
               ets:insert(completed_tasks, lists:keydelete(pid, 1, Task));
             _ ->
-              io:format("sending the completed task to the listed pid~n"),
               ReturnPid ! {task_complete, lists:keydelete(pid, 1, Task)}
           end
       end,
@@ -394,7 +358,6 @@ loop() ->
     {ReturnPid, retrieve_task, TaskId} ->
       case ets:lookup(completed_tasks, TaskId) of
         [] ->
-          io:format("Task id NOT in completed task table ~p~n", [TaskId]),
           ReturnPid ! {task_not_complete, TaskId};
         Task ->
           io:format("Task id in completed task table ~p~n", [TaskId]),
