@@ -63,6 +63,7 @@ loop(PipeIn, PipeOut) ->
     {_PipeIn, {data, Str}} ->
       case Str of
         "add task " ++ TaskStr ->
+          io:format("L: task received"),
           head_resp_to_pipe(PipeOut, add_task, format_task_str(TaskStr));
         "remove task " ++ TaskId ->
           head_resp_to_pipe(PipeOut, remove_task, TaskId);
@@ -84,15 +85,21 @@ loop(PipeIn, PipeOut) ->
           head_resp_to_pipe(PipeOut, idle, true);
         "idle false" ->
           head_resp_to_pipe(PipeOut, idle, false);
-        Unkwown ->
-          io:format("bad input to port: ~p~n", [Unkwown])
+        Unknown ->
+          io:format("bad input to port: ~p~n", [Unknown])
       end,
       loop(PipeIn, PipeOut);
     {Pipe, eof} ->
-      io:format("received EOF from pipe ~p~n", Pipe),
       connect_to_pipe_and_loop();
     {task_complete, CompletedTask} ->
-      head_resp_to_pipe(PipeOut, {task_complete, CompletedTask}),
+      io:format("L: returning task in port loop"),
+      port_command(PipeOut,
+        [
+          atom_to_binary(task_complete, utf8),
+          bs(),
+          list_to_binary(task_to_str(CompletedTask)),
+          bn()
+        ]),
       loop(PipeIn, PipeOut);
     stop ->
       io:format("Received STOP in port~n"),
@@ -164,55 +171,45 @@ task_to_str(Task) ->
     "\"result=\"" ++ Result ++
     "\"".
 
-
-await_head_resp(Type, Value) ->
-  Head = head_pid(),
-  Head ! {self(), Type, Value},
-  receive
-    Response ->
-      Response
-  end.
-
 bs() ->
   list_to_binary(" ").
 
 bn() ->
   list_to_binary("\n").
 
-as_bin(Response) ->
-  case Response of
-    {new_task_id, ClientId, TaskId} ->
-      [
-        atom_to_binary(new_task_id, utf8),
-        bs(),
-        list_to_binary(ClientId),
-        bs(),
-        list_to_binary(integer_to_list(TaskId)),
-        bn()
-      ];
-    {task_complete, Task} -> % called when client makes a retrieve request
-      [
-        atom_to_binary(task_complete, utf8),
-        bs(),
-        list_to_binary(task_to_str(Task)),
-        bn()
-      ];
-    {task_not_complete, TaskId} ->
-      [
-        atom_to_binary(task_not_complete, utf8),
-        bs(),
-        list_to_binary(integer_to_list(TaskId)),
-        bn()
-      ]
-  end.
-
-
-head_resp_to_pipe(Pipe, HeadResp) ->
-  spawn(
-    fun () ->
-      port_command(Pipe, as_bin(HeadResp))
-    end
-  ).
-
 head_resp_to_pipe(Pipe, Type, Value) ->
-  head_resp_to_pipe(Pipe, await_head_resp(Type, Value)).
+  head_pid() ! {self(), Type, Value},
+  receive
+    {new_task_id, ClientId, TaskId} ->
+      port_command(
+        Pipe,
+        [
+          atom_to_binary(new_task_id, utf8),
+          bs(),
+          list_to_binary(ClientId),
+          bs(),
+          list_to_binary(integer_to_list(TaskId)),
+          bn()
+        ]);
+    {task_complete, Task} ->
+      io:format("L: returning task"),
+      port_command(
+        Pipe,
+        [
+          atom_to_binary(task_complete, utf8),
+          bs(),
+          list_to_binary(task_to_str(Task)),
+          bn()
+        ]),
+      io:format("L: task returned");
+    {task_not_complete, TaskId} ->
+      port_command(
+        Pipe,
+        [
+          atom_to_binary(task_not_complete, utf8),
+          bs(),
+          list_to_binary(integer_to_list(TaskId)),
+          bn()
+        ]
+      )
+  end.

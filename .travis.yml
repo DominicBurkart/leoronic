@@ -10,27 +10,47 @@ matrix:
         - ./.elvis rock
 
     - name: "bash static analysis & styling"
+      language: generic
       script:
         - shellcheck *.sh
 
     - name: "erlang x python integration tests"
-      language: erlang
-      otp_release: 22.0
+      os: osx
+      language: generic
       cache:
-        pip: true
-        apt: true
+        directories:
+          - $HOME/Library/Caches/Homebrew
+      before_cache:
+        - brew cleanup
       before_install:
-        - sudo add-apt-repository -y ppa:deadsnakes/ppa
-        - sudo apt-get update
-        - sudo apt install python3.7
-        - curl https://bootstrap.pypa.io/get-pip.py | sudo python3.7
+        - brew install erlang
+        - brew upgrade python
       install:
         - sudo pip3 install -r requirements.txt
       script:
-        - |
-          ( bash compile_and_run.sh ) & ( sleep 10 && pytest -x tests/test_integration.py )
-      after_success:
-        - codecov
+        - ./python_integration_test
+
+    #    - name: "erlang x python integration tests"
+    #      language: erlang
+    #      otp_release: 22.0
+    #      cache:
+    #        pip: true
+    #        apt: true
+    #      addons:
+    #        apt:
+    #          packages:
+    #            - parallel
+    #      before_install:
+    #        - sudo add-apt-repository -y ppa:deadsnakes/ppa
+    #        - sudo apt-get update
+    #        - sudo apt install python3.7
+    #        - curl https://bootstrap.pypa.io/get-pip.py | sudo python3.7
+    #      install:
+    #        - sudo pip3 install -r requirements.txt
+    #      script:
+    #        - ./python_integration_test
+    #      after_success:
+    #        - codecov
 
     - name: "python unit tests"
       language: python
@@ -91,6 +111,7 @@ matrix:
     #     - codecov # run other reports: https://docs.codecov.io/docs/merging-reports
 
     - name: "total lines of code"
+      language: generic
       addons:
         apt:
           packages:
