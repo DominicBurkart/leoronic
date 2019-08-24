@@ -38,12 +38,9 @@ pipe_name(Type) ->
   end.
 
 init() ->
-  io:format("initiating leoronic port...~n"),
   register(leoronic_port, self()),
   process_flag(trap_exit, true),
-  io:format("making pipes...~n"),
   make_pipes(),
-  io:format("connecting to pipes...~n"),
   connect_to_pipe_and_loop().
 
 pipe_cmd(Cmd) when is_list(Cmd) ->
@@ -62,13 +59,10 @@ connect_to_pipe_and_loop() ->
   ).
 
 loop(PipeIn, PipeOut) ->
-  io:format("port awaiting input...~n"),
   receive
     {_PipeIn, {data, Str}} ->
-      io:format("received pipe input: ~p~n", [Str]),
       case Str of
         "add task " ++ TaskStr ->
-          io:format("pipe input parsed as new task~n"),
           head_resp_to_pipe(PipeOut, add_task, format_task_str(TaskStr));
         "remove task " ++ TaskId ->
           head_resp_to_pipe(PipeOut, remove_task, TaskId);
@@ -98,7 +92,6 @@ loop(PipeIn, PipeOut) ->
       io:format("received EOF from pipe ~p~n", Pipe),
       connect_to_pipe_and_loop();
     {task_complete, CompletedTask} ->
-      io:format("recieved completed task information in port in a weird place. Sending to the outbound pipe~n"),
       head_resp_to_pipe(PipeOut, {task_complete, CompletedTask}),
       loop(PipeIn, PipeOut);
     stop ->
@@ -141,7 +134,6 @@ format_task_str(TaskStr) ->
     {dockerless, list_to_bool(Dockerless)},
     {container, string:replace(base64:decode_to_string(Container), "/n", "~n")}
   ],
-  io:format("task string formatted~n"),
   V.
 
 
@@ -176,10 +168,8 @@ task_to_str(Task) ->
 await_head_resp(Type, Value) ->
   Head = head_pid(),
   Head ! {self(), Type, Value},
-  io:format("task sent from port to head. Head identity: ~p Type: ~p Value: ~p~n", [Head, Type, Value]),
   receive
     Response ->
-      io:format("received response: ~p~n", [Response]),
       Response
   end.
 
@@ -190,7 +180,6 @@ bn() ->
   list_to_binary("\n").
 
 as_bin(Response) ->
-  io:format("in as_bin with response ~p~n", [Response]),
   case Response of
     {new_task_id, ClientId, TaskId} ->
       [
@@ -202,7 +191,6 @@ as_bin(Response) ->
         bn()
       ];
     {task_complete, Task} -> % called when client makes a retrieve request
-      io:format("binarizing completed task...~n"),
       [
         atom_to_binary(task_complete, utf8),
         bs(),

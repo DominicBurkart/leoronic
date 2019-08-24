@@ -44,14 +44,12 @@ run_container/3
 %%% API
 
 start() ->
-  io:format("leoronic:start is called...~n"),
   gen_server:start(?MODULE, make_state(), []).
 
 start_link() ->
   gen_server:start_link(?MODULE, make_state(), []).
 
 add_child_process(Mod, Fun, Args) ->
-  io:format("adding child process with gen_server call...~n"),
   gen_server:call(?MODULE, {add_child, Mod, Fun, Args}).
 
 %%housekeeping(Pid, Cmd) ->
@@ -59,16 +57,12 @@ add_child_process(Mod, Fun, Args) ->
 
 send_system_info(Pid) ->
   Info = system_info(),
-  io:format("system information collected on worker ~p: ~p~n", [node(), Info]),
-  io:format("sending information to ~p~n", [Pid]),
   Pid ! Info.
 
 system_info() ->
-  io:format("sending system info..."),
   gen_server:call(?MODULE, send_system_info).
 
 perform_task(Task) ->
-  io:format("Sending cast to perform task.~n"),
   gen_server:cast(?MODULE, {perform_task, Task}).
 
 stop(Pid) ->
@@ -80,24 +74,19 @@ make_state() ->
   #state { kids=ets:new(kids, [set, public, named_table]) }.
 
 init(State) -> % todo where to declare process_flag(trap_exit, true),
-  io:format("starting leoronic...~n"),
   register(leoronic, self()),
   spawn_kid(leoronic, alert_new_node, []),
   spawn_kid(port, start, []),
   case check_should_be_head() of
     is_head ->
-      ok,
-      io:format("head process started.~n");
+      ok;
     not_head ->
-      io:format("node is not head.~n"),
       spawn_kid(leoronic, loop_check_should_be_head, [])
   end,
   {ok, State}.
 
 handle_call({add_child, Mod, Fun, Args}, _From, State) ->
-  io:format("handling add_child...~n"),
   spawn_kid(Mod, Fun, Args),
-  io:format("Returning ok...~n"),
   {reply, ok, State};
 
 handle_call(send_system_info, _From, State) ->
@@ -117,9 +106,7 @@ handle_call(stop, _From, _State) ->
   {no_reply}.
 
 handle_cast({perform_task, Task}, State) ->
-  io:format("Performing task...~n"),
   CompletedTaskInfo = perform_task_internal(Task),
-  io:format("Completed task info: ~p~n", [CompletedTaskInfo]),
   head:head_pid() ! {self(), task_complete, CompletedTaskInfo},
   {noreply, State}.
 
@@ -130,17 +117,13 @@ code_change(_, State, _) ->
 
 
 perform_task_internal(Task) ->
-  io:format("in perform task internal function. Task passed: ~p~n", [Task]),
   [{id, TaskId}] = sub([id], Task),
   Ran = run_container(
     select(container, Task),
     sub([memory, storage, cpus], Task),
     integer_to_list(TaskId)
   ),
-  io:format("ran: ~p~n", [Ran]),
-  Imputed = impute_task_values(Task, Ran),
-  io:format("imputed values: ~p~n", [Imputed]),
-  Imputed.
+  impute_task_values(Task, Ran).
 
 
 send_system_info() -> % yields memory in MB
@@ -173,7 +156,6 @@ send_system_info() -> % yields memory in MB
 
 
 spawn_kid(Mod, Fun, Args) ->
-  io:format("spawning kid: " ++ atom_to_list(Mod) ++ " " ++ atom_to_list(Fun) ++ "~n"),
   case Fun of
     start ->
       register(Mod, spawn(Mod, Fun, Args));

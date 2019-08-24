@@ -31,19 +31,15 @@ parse_tags([Tag | RemainingTags]) ->
   end.
 
 start_pipe(PipeName) ->
-  io:format("Making pipe ~p~n", [PipeName]),
   os:cmd("mkfifo " ++ PipeName),
   pipe_listener(PipeName, open_port(PipeName, [eof]), "").
 
 
 pipe_listener(PipeName, Pipe, CollectedStr) ->
-  io:format("~p is listening at ~p~n", [PipeName, Pipe]),
   receive
     {Pipe, {data, Str}} ->
-      io:format("Pipe received data! ~p~n", [Str]),
       pipe_listener(PipeName, Pipe, CollectedStr ++ Str);
     {Pid, rm_pipe} ->
-      io:format("pipe listener received rm_pipe request...~n"),
       os:cmd("rm " ++ PipeName),
       Pid ! {pipe_collected, PipeName, CollectedStr}
   end.
@@ -51,10 +47,8 @@ pipe_listener(PipeName, Pipe, CollectedStr) ->
 
 collect_listener(Pid) ->
   Pid ! {self(), rm_pipe},
-  io:format("Awaiting pipe collection from ~p~n", [Pid]),
   receive
     {pipe_collected, PipeName, CollectedStr} ->
-      io:format("Collecting ~p~nValue: ~p", [PipeName, CollectedStr]),
       case string:sub_string(PipeName, 1, 6) of
         "result" -> {result, CollectedStr};
         "stdout" -> {stdout, CollectedStr};
@@ -112,11 +106,8 @@ run_container(Container, Tags, TaskIdStr) when is_list(TaskIdStr) ->
 
   % run commands
   DockerFullCommand = lists:flatten([DockerBuildCommand, "\n", DockerRunCommand, "\n", DockerCleanUpCommand]),
-  io:format("Full command : ~p~n", [DockerFullCommand]),
 
-  io:format("Launching command...~n"),
-  Output = os:cmd(DockerFullCommand),
-  io:format("Command ran. Output: ~p~n", [Output]),
+  os:cmd(DockerFullCommand),
 
   % collect results & return with runtime information
   get_completed_values(ListenerPids,
