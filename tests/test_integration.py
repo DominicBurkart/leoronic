@@ -41,8 +41,8 @@ def test_blocking_functions():
 
     assert starmap_output == starmap_local_output
     assert map_output == map_local_output
-    # assert list(imap_output) == map_local_output todo
-    # assert all(v in map_local_output for v in imap_unordered_output) todo
+    assert list(imap_output) == map_local_output
+    assert all(v in map_local_output for v in imap_unordered_output)
 
 
 def test_async_functions():
