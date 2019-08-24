@@ -16,12 +16,12 @@ Simple distributed computing.
 ### note: leoronic is still in development and is not ready for use.
 
 Leoronic is a distributed computing library. Acting as a thin (~1500 lines)
-layer over OTP and Docker, it provides the same interface as Python's
+layer over OTP, it provides the same interface as Python's
 multiprocessing library and, once in alpha, will require minimal setup. Leoronic
 automatically handles the loss or addition of new nodes to your
 cluster, allowing you to increase throughput or handle hardware
 failure on the fly, without stopping your applicaton
-or modifying your code. Leoronic maintains a complete set of
+or modifying your code. Leoronic maintains a comprehensive set of
 integration tests and is being actively maintained and extended.
 
 ### System requirements
@@ -41,6 +41,7 @@ a dev guide is below.
 
 #### Completeness
 
+- Terminate jobs that exceed their allotted system resources
 - Handle kwargs in python
 - Create integration tests for task requirement setting
 - Create unit tests for task requirement setting in python
@@ -58,9 +59,7 @@ a dev guide is below.
 
 ### Dev Installation
 
-To set up your dev environment,
-make sure that you have both [Docker](https://docs.docker.com/install/)
-and Erlang (available in every major system package manager)
+To set up your dev environment, make sure that you have Erlang (available in every major system package manager)
 installed and updated. Then, download the leoronic repo and install
 the git hooks as such:
 
