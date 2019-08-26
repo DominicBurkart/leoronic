@@ -41,6 +41,7 @@ a dev guide is below.
 
 #### Completeness
 
+- fix broken codecov analysis.
 - Terminate jobs that exceed their allotted system resources
 - Handle kwargs in python
 - Create integration tests for task requirement setting
@@ -49,6 +50,7 @@ a dev guide is below.
 
 #### New Features
 
+- fully support linux.
 - allow commands to be run outside of docker.
 - provide support for Rust and R.
 - allow commands to be passed to a waiting server program, which
