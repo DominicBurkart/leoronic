@@ -243,7 +243,7 @@ job_checker(LastRan, LastIdle) ->
         {times, RealLastRan, RealLastIdle} ->
           job_checker(RealLastRan, RealLastIdle)
       end;
-    _ ->
+    _ ->  % todo don't run this more than once a second or so
       % todo check for timed-out tasks / idling here
       case get_runnable_tasks() of
         undefined ->
