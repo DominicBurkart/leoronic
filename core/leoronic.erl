@@ -74,6 +74,8 @@ make_state() ->
   #state { kids=ets:new(kids, [set, public, named_table]) }.
 
 init(State) -> % todo where to declare process_flag(trap_exit, true),
+  application:start(sasl),
+  application:start(os_mon),
   register(leoronic, self()),
   spawn_kid(leoronic, alert_new_node, []),
   spawn_kid(port, start, []),
@@ -102,11 +104,15 @@ handle_call(prune_kids, _From, _State) ->
 
 handle_call(stop, _From, _State) ->
   [Kid ! stop || {Kid} <- ets:tab2list(kids)],
+  application:stop(os_mon),
+  application:stop(sasl),
+  io:format("leoronic main exiting"),
   exit(normal),
   {no_reply}.
 
 handle_cast({perform_task, Task}, State) ->
   CompletedTaskInfo = perform_task_internal(Task),
+  io:format("task performed"),
   head:head_pid() ! {self(), task_complete, CompletedTaskInfo},
   {noreply, State}.
 
@@ -127,13 +133,9 @@ perform_task_internal(Task) ->
 
 
 send_system_info() -> % yields memory in MB
-  application:start(sasl),
-  application:start(os_mon),
   MemoryData = memsup:get_system_memory_data(),
   TotalMemory = utils:select(total_memory, MemoryData),
   CurrentMemory = utils:select(free_memory, MemoryData),
-  application:stop(os_mon),
-  application:stop(sasl),
 
   Cores = erlang:system_info(logical_processors_available),
 
