@@ -14,7 +14,7 @@ matrix:
       script:
         - shellcheck *.sh
 
-    - name: "erlang x python integration tests"
+    - name: "erlang x python integration tests - osx"
       os: osx
       language: generic
       cache:
@@ -28,27 +28,26 @@ matrix:
       script:
         - ./python_integration_test
 
-    #    - name: "erlang x python integration tests"
-    #      language: erlang
-    #      otp_release: 22.0
-    #      cache:
-    #        pip: true
-    #        apt: true
-    #      addons:
-    #        apt:
-    #          packages:
-    #            - parallel
-    #      before_install:
-    #        - sudo add-apt-repository -y ppa:deadsnakes/ppa
-    #        - sudo apt-get update
-    #        - sudo apt install python3.7
-    #        - curl https://bootstrap.pypa.io/get-pip.py | sudo python3.7
-    #      install:
-    #        - sudo pip3 install -r requirements.txt
-    #      script:
-    #        - ./python_integration_test
-    #      after_success:
-    #        - codecov
+    - name: "erlang x python integration tests - linux"
+      language: erlang
+      otp_release: 22.0
+      #      cache:
+      #        directories:
+      #          - /home/travis/.cache/pip
+      before_install:
+        - |
+          python3.7 --version || {
+            sudo add-apt-repository -y ppa:deadsnakes/ppa
+            sudo apt-get update
+            sudo apt-get install python3.7
+          }
+        - curl https://bootstrap.pypa.io/get-pip.py | sudo python3.7
+      install:
+        - sudo pip3 install -r requirements.txt
+      script:
+        - ./python_integration_test
+      after_success:
+        - codecov
 
     - name: "python unit tests"
       language: python
