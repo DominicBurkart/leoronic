@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 
+# start test processes
 ./compile_and_run > erlang_output &
 ./pytest_integration > pytest_output &
+
+# check in on the test processes after a bit
 sleep 30
 tail pytest_output | grep -q "==== [0-9]* passed in [0-9]*\.[0-9]* seconds ====" && exit 0
+
+# timeout reached; exit with failure
+echo BEGIN ERLANG OUTPUT
+cat erlang_output
+echo END ERLANG OUTPUT. BEGIN PYTEST OUTPUT
 cat pytest_output
+echo END PYTEST OUTPUT
 echo "timeout in python_integration_test"
 exit 1
