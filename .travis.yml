@@ -19,12 +19,10 @@ matrix:
       language: generic
       cache:
         directories:
-          - $HOME/Library/Caches/Homebrew
-      before_cache:
-        - brew cleanup
+          - /usr/local/Cellar/erlang
+          - /usr/local/opt/erlang
       before_install:
-        - brew install erlang
-        - brew upgrade python
+        - brew link erlang || { rmdir /usr/local/opt/erlang; brew install erlang; }
       install:
         - sudo pip3 install -r requirements.txt
       script:
