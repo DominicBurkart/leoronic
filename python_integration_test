@@ -9,10 +9,10 @@ sleep 30
 tail pytest_output | grep -q "==== [0-9]* passed in [0-9]*\.[0-9]* seconds ====" && exit 0
 
 # timeout reached; exit with failure
-echo BEGIN ERLANG OUTPUT
+echo -e "BEGIN ERLANG OUTPUT\n\n\n"
 cat erlang_output
-echo END ERLANG OUTPUT. BEGIN PYTEST OUTPUT
+echo -e "\n\n\nEND ERLANG OUTPUT. BEGIN PYTEST OUTPUT\n\n\n"
 cat pytest_output
-echo END PYTEST OUTPUT
+echo -e "\n\n\nEND PYTEST OUTPUT"
 echo "timeout in python_integration_test"
 exit 1
