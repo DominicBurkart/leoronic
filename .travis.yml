@@ -20,16 +20,11 @@ matrix:
       cache:
         directories:
           - $HOME/Library/Caches/Homebrew
-          - /usr/local/Homebrew
-          - /usr/local/Cellar/erlang
-          - /usr/local/opt/erlang
-          - /usr/local/Cellar/python
-          - /usr/local/opt/python
       before_cache:
         - brew cleanup
       before_install:
-        - brew upgrade erlang || { rmdir /usr/local/opt/erlang; brew install erlang; }
-        - brew upgrade python || { rmdir /usr/local/opt/python; brew install python; }
+        - brew install erlang
+        - brew upgrade python
       install:
         - sudo pip3 install -r requirements.txt
       script:
