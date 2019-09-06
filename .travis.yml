@@ -75,7 +75,7 @@ matrix:
         - pip install -r requirements.txt
         - pip install mypy
       script:
-        - mypy wrappers/python3
+        - mypy --strict wrappers/python3
 
     - name: "python styling"
       language: python
