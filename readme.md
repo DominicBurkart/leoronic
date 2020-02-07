@@ -13,16 +13,15 @@
 
 Simple distributed computing.
 
-### note: leoronic is still in development and is not ready for use.
+### note: leoronic is a prototype to understand grid computing.
 
 Leoronic is a distributed computing library. Acting as a thin (~1500 lines)
 layer over OTP, it provides the same interface as Python's
-multiprocessing library and, once in alpha, will require minimal setup. Leoronic
+multiprocessing library and requires minimal setup. Leoronic
 automatically handles the loss or addition of new nodes to your
 cluster, allowing you to increase throughput or handle hardware
 failure on the fly, without stopping your applicaton
-or modifying your code. Leoronic maintains a comprehensive set of
-integration tests and is being actively maintained and extended.
+or modifying your code.
 
 ### System requirements
 
