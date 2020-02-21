@@ -29,13 +29,6 @@ or modifying your code.
 - bash
 - perl
 
-## Contributing
-
-Help or feedback is welcome and appreciated. Feel free to
-[open an issue](https://github.com/DominicBurkart/leoronic/issues/new),
-or if you have the technical expertise and time to contribute,
-a dev guide is below.
-
 ### Current Dev Goals
 
 #### Completeness
